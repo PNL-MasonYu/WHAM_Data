@@ -197,8 +197,6 @@ class WhamRedPitaya():
                     #conn.put("RAW:RP_F0918A:CH_02", "$", np.int16(data_in[::2]))
                     #conn.put("RAW:RP_F0918A:FREQ", "$", fs)
 
-                    self.DEVICE_NODE
-
                     conn.put(self.DEVICE_NODE+":CH_01", "$", np.int16(data_in[1::2]))
                     conn.put(self.DEVICE_NODE+":CH_02", "$", np.int16(data_in[::2]))
                     conn.put(self.DEVICE_NODE+":FREQ", "$", fs)
