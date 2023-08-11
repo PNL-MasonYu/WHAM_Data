@@ -11,6 +11,90 @@ import h5py, datetime
 import RP_PLL
 
 
+MDSPLUS_SERVER = "andrew"
+MDSPLUS_TREE = "wham"
+
+DEVICE_TREE = "ECH.ECH_RAW"
+#DEVICE_TREE = "\WHAM::TOP.ECH.ECH_RAW"
+
+
+IP_LIST = [
+    ("192.168.0.150", 5000),
+    ("192.168.0.151", 5000),
+    ("192.168.0.152", 5000)
+]
+
+
+class WhamRedPitayaGroup():
+
+
+    devices_list = []
+
+    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
+
+        # Instance variables
+
+        self.num_devices = min(num_devices, len(ip_list)) # If they don't match, take smallest
+        self.ip_list = ip_list
+        self.device_tree = device_tree
+        self.mdsplus_server = mdsplus_server
+        self.mdsplus_tree = mdsplus_tree
+
+
+        print(self.num_devices)
+
+        self._create_devices()
+
+
+    def _get_tree(self):
+        pass
+
+    def _populate_tree(self):
+        pass
+
+
+    def _create_devices(self, num_devices, , device_tree):
+
+        for d in range(0,num_devices):
+
+
+
+            ip = self.ip_list[d][0]
+            port = self.ip_list[d][1]
+
+            device_node = ".RP_" + str(d+1).zfill(2)
+
+            device_node = device_tree + device_node
+
+            self.dev = WhamRedPitaya(device_node=device_node)
+
+
+            print(d)
+
+
+
+        pass
+
+    def connect_devices(self):
+        pass
+
+    def arm_devices(self):
+        pass
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
 class WhamRedPitaya():
 
     # Class variables:
@@ -36,20 +120,20 @@ class WhamRedPitaya():
     data_in = None
 
 
-    def __init__(self, DEVICE_NODE="RP", IP="192.168.0.150", PORT=5000):
+    def __init__(self, device_node=DEVICE_TREE+".RP_01", ip="192.168.0.150", port=5000, mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
 
         # Instance variables:
 
         ##############################################################################
         # Warning : For this code to work, the correct FPGA firmware and CPU software must have been updated.
 
-        self.DEVICE_NODE = DEVICE_NODE # The name of the node to write data to. Should be something like "ECH:ECH_RAW:RP_1"
+        self.device_node = device_node # The name of the node to write data to. Should be something like "ECH:ECH_RAW:RP_1"
 
-        self.IP = IP
-        self.PORT = PORT #5000 by default
+        self.ip = ip
+        self.port = port #5000 by default
 
-        self.mdsplus_server = "andrew" # server running mdsplus
-        self.mdsplus_tree = "wham" # name of top mdsplus tree (should always be "wham")
+        self.mdsplus_server = mdsplus_server # server running mdsplus
+        self.mdsplus_tree = mdsplus_tree # name of top mdsplus tree (should always be "wham")
 
 
         #### User selection
@@ -79,9 +163,9 @@ class WhamRedPitaya():
 
     def connect(self):
 
-        print("Connecting to device at " + self.IP + " on port " + str(self.PORT))
+        print("Connecting to device at " + self.ip + " on port " + str(self.port))
         self.dev = RP_PLL.RP_PLL_device(None)
-        self.dev.OpenTCPConnection(self.IP, self.PORT)
+        self.dev.OpenTCPConnection(self.ip, self.port)
 
 
     def configure(self):
@@ -137,23 +221,23 @@ class WhamRedPitaya():
                 status = self.dev.read_Zynq_AXI_register_uint32(self.STATUS_REG)
                 time.sleep(1e-1)
                 
-            self.__read()
+            self._read()
 
             timeStart = time.time()
 
             if self.bSave == 1:
-                self.__write_hdf5()
+                self._write_hdf5()
 
             if self.bMDS == 1:
-                self.__write_mdsplus()
+                self._write_mdsplus()
 
             if self.bPlot == 1: 
-                self.__write_plots()
+                self._write_plots()
 
             print('Elapsed time for writing = {}'.format(time.time() - timeStart))
             print('Done')
 
-    def __read(self):
+    def _read(self):
         print("Start receiving data")
         timeStart = time.time()
         self.data_in = self.dev.read_Zynq_ddr(self.data_addr-self.START_ADDR, int(2*self.n_pts))
@@ -167,7 +251,7 @@ class WhamRedPitaya():
         
 
 
-    def __write_mdsplus(self):
+    def _write_mdsplus(self):
         conn = connection.Connection(self.mdsplus_server) # Connect to MDSplus server (andrew)
         #tree_name = 230731000 + shot_num
         
@@ -177,10 +261,10 @@ class WhamRedPitaya():
         print("Writing data to shot number: " + shot_num) 
         
         if self.channel == 3 and not(self.ADC1_counter == 1 and self.ADC2_counter == 1):
-            conn.put(self.DEVICE_NODE+":CH_01", "$", np.int16(self.data_in[1::2]))
-            conn.put(self.DEVICE_NODE+":CH_02", "$", np.int16(self.data_in[::2]))
-            conn.put(self.DEVICE_NODE+":FREQ", "$", self.fs)
-            conn.put(self.DEVICE_NODE+":NAME", "$", self.IP) # TODO: need to change this to IP
+            conn.put(self.device_node+":CH_01", "$", np.int16(self.data_in[1::2]))
+            conn.put(self.device_node+":CH_02", "$", np.int16(self.data_in[::2]))
+            conn.put(self.device_node+":FREQ", "$", self.fs)
+            conn.put(self.device_node+":NAME", "$", self.IP) # TODO: need to change this to IP
 
             #conn.put("RAW:RP_F0918A:CH_01", "$", np.int16(self.data_in[1::2]))
             #conn.put("RAW:RP_F0918A:CH_02", "$", np.int16(self.data_in[::2]))
@@ -194,7 +278,7 @@ class WhamRedPitaya():
             conn.closeTree(self.mdsplus_tree, 0)
 
     
-    def __write_hdf5(self):
+    def _write_hdf5(self):
         fNames = self.fileName.split(".")
         fNames[0] += str(shot_num)
         shot_num += 1
@@ -232,7 +316,7 @@ class WhamRedPitaya():
             file_output.close()
 
 
-    def __write_plots(self):
+    def _write_plots(self):
         if self.channel == 3:
             time_scale = np.linspace(0, 1/self.fs*len(self.data_in[::2]), len(self.data_in[::2]))
             plt.plot(time_scale, self.data_in[::2])
