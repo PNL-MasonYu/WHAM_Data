@@ -81,7 +81,7 @@ class RP_PLL_device():
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1) # this avoids a ~33 ms on Windows before our request packets are sent (!!)
         # self.sock.setblocking(1)
-        self.sock.settimeout(None)
+        self.sock.settimeout(2)
         try:
             self.sock.connect((self.HOST, self.PORT))
             self.valid_socket = valid_socket_for_general_comms

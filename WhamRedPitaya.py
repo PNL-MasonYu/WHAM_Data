@@ -27,8 +27,8 @@ IP_LIST = [
 
 class WhamRedPitayaGroup():
 
-
     devices_list = []
+    connected_devices_list = []
 
     def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
 
@@ -47,39 +47,80 @@ class WhamRedPitayaGroup():
 
 
     def _get_tree(self):
+        # Get list of device nodes in MDSplus tree using MDSplus.connection.Connection and TDI
         pass
 
     def _populate_tree(self):
+        # Create device nodes in MDSplus tree using MDSplus.connection.Connection and TDI
         pass
 
 
-    def _create_devices(self, num_devices, , device_tree):
+    def _create_devices(self):
 
-        for d in range(0,num_devices):
+        # Iterate through number of devices
+        for d in range(0,self.num_devices):
 
-
-
+            # Read device IP and port
             ip = self.ip_list[d][0]
             port = self.ip_list[d][1]
 
+            # Construct MDSplus node path
             device_node = ".RP_" + str(d+1).zfill(2)
+            device_node = self.device_tree + device_node
 
-            device_node = device_tree + device_node
+            # Create device object
+            device = WhamRedPitaya(device_node=device_node, ip=ip, port=port, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree)
 
-            self.dev = WhamRedPitaya(device_node=device_node)
+            # Add to list of device objects
+            self.devices_list.append(device)
 
-
-            print(d)
-
-
-
-        pass
 
     def connect_devices(self):
-        pass
+
+        # Iterate through number of devices
+        for d in range(0,self.num_devices):
+
+            # Retrieve device from list of device objects
+            device = self.devices_list[d]
+
+            try:
+                # Attempt to connect to device
+                device.connect()
+
+                # If successful, add device to list of connected devices
+                self.connected_devices_list.append(device)
+            
+            except WhamRedPitayaConnectionError as e:
+
+                # If not successful, skip and write None to list of connected devices
+                print("Skipping device at " + device.ip + ".")
+                self.connected_devices_list.append(None)
+
+
+    def configure_devices(self):
+
+        # Iterate through list of connected devices
+        for device in self.connected_devices_list:
+
+            if device == None:
+                continue
+            else:
+                device.configure()
 
     def arm_devices(self):
-        pass
+
+        # TODO: configure threads here
+
+        # Iterate through list of connected devices
+        for device in self.connected_devices_list:
+
+            if device == None:
+                continue
+            else:
+                device.arm()
+
+
+
 
 
     
@@ -163,9 +204,14 @@ class WhamRedPitaya():
 
     def connect(self):
 
-        print("Connecting to device at " + self.ip + " on port " + str(self.port))
+        print("Connecting to device at " + self.ip + " on port " + str(self.port) + ".")
         self.dev = RP_PLL.RP_PLL_device(None)
+        
         self.dev.OpenTCPConnection(self.ip, self.port)
+
+        if self.dev.valid_socket == False:
+            print("Error occurred attempting to connect to device at " + self.ip + " on port " + str(self.port) + ".")
+            raise WhamRedPitayaConnectionError()
 
 
     def configure(self):
@@ -223,6 +269,9 @@ class WhamRedPitaya():
                 
             self._read()
 
+
+
+    def store(self):
             timeStart = time.time()
 
             if self.bSave == 1:
@@ -237,6 +286,9 @@ class WhamRedPitaya():
             print('Elapsed time for writing = {}'.format(time.time() - timeStart))
             print('Done')
 
+
+
+
     def _read(self):
         print("Start receiving data")
         timeStart = time.time()
@@ -248,23 +300,39 @@ class WhamRedPitaya():
         self.data_in = np.fromstring(self.data_in, dtype=np.int16) # Uncomment this line if you want to read data as 16 bits
         print('Elapsed time for conversion = {}'.format(time.time() - timeStart))
         
-        
+        #2.5 million samples
 
-
+    
     def _write_mdsplus(self):
-        conn = connection.Connection(self.mdsplus_server) # Connect to MDSplus server (andrew)
-        #tree_name = 230731000 + shot_num
         
+        # No remote connection to MDSplus is provided so create a new one
+
+        # Establish new remote connection to MDSplus
+        conn = connection.Connection(self.mdsplus_server) # Connect to MDSplus server (andrew)
+        
+        # Open the tree and latest shot
         conn.openTree(self.mdsplus_tree, 0)
 
-        shot_num = conn.get('$shot') # Get current shot number using TDI expression
+        # Write the data
+        self.write_mdsplus(conn)
+
+        # Close the tree and latest shot
+        conn.closeTree(self.mdsplus_tree, 0)
+
+
+    def write_mdsplus(self, conn):
+
+        # Get current shot number using TDI expression
+        shot_num = conn.get('$shot') 
         print("Writing data to shot number: " + shot_num) 
+        print("Writing data to node: " + self.device_node) 
         
+        # Write (put) the data to the device in MDSplus
         if self.channel == 3 and not(self.ADC1_counter == 1 and self.ADC2_counter == 1):
             conn.put(self.device_node+":CH_01", "$", np.int16(self.data_in[1::2]))
             conn.put(self.device_node+":CH_02", "$", np.int16(self.data_in[::2]))
             conn.put(self.device_node+":FREQ", "$", self.fs)
-            conn.put(self.device_node+":NAME", "$", self.IP) # TODO: need to change this to IP
+            conn.put(self.device_node+":NAME", "$", self.ip) # TODO: need to change this to IP
 
             #conn.put("RAW:RP_F0918A:CH_01", "$", np.int16(self.data_in[1::2]))
             #conn.put("RAW:RP_F0918A:CH_02", "$", np.int16(self.data_in[::2]))
@@ -275,7 +343,6 @@ class WhamRedPitaya():
             #conn.put("ECH:ECH_RAW:RP_1:FREQ", "$", self.fs)
             #conn.put("ECH:ECH_RAW:RP_1:NAME", "$", self.IP) # need to change this to IP
 
-            conn.closeTree(self.mdsplus_tree, 0)
 
     
     def _write_hdf5(self):
@@ -326,3 +393,13 @@ class WhamRedPitaya():
             plt.plot(self.data_in)
     #        plt.plot(np.diff(self.data_in))
             plt.show()
+
+
+
+
+
+
+class WhamRedPitayaConnectionError(Exception):
+
+    def __init__(self):
+        pass
