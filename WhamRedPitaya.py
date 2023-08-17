@@ -10,6 +10,7 @@ import time
 import h5py, datetime
 import RP_PLL
 
+from threading import Thread
 
 MDSPLUS_SERVER = "andrew"
 MDSPLUS_TREE = "wham"
@@ -20,8 +21,7 @@ DEVICE_TREE = "ECH.ECH_RAW"
 
 IP_LIST = [
     ("192.168.0.150", 5000),
-    ("192.168.0.151", 5000),
-    ("192.168.0.152", 5000)
+    ("192.168.0.151", 5000)
 ]
 
 
@@ -30,7 +30,9 @@ class WhamRedPitayaGroup():
     devices_list = []
     connected_devices_list = []
 
-    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
+    threads = []
+
+    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE):
 
         # Instance variables
 
@@ -69,13 +71,15 @@ class WhamRedPitayaGroup():
             device_node = self.device_tree + device_node
 
             # Create device object
-            device = WhamRedPitaya(device_node=device_node, ip=ip, port=port, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree)
+            device = WhamRedPitaya(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree)
 
             # Add to list of device objects
             self.devices_list.append(device)
 
 
     def connect_devices(self):
+
+        # Attempt to establish connections to each device one by one
 
         # Iterate through number of devices
         for d in range(0,self.num_devices):
@@ -99,6 +103,8 @@ class WhamRedPitayaGroup():
 
     def configure_devices(self):
 
+        # Configure each **connected** device one by one
+
         # Iterate through list of connected devices
         for device in self.connected_devices_list:
 
@@ -109,7 +115,29 @@ class WhamRedPitayaGroup():
 
     def arm_devices(self):
 
-        # TODO: configure threads here
+        # Empty list to manage the threads
+        self.threads = []
+
+        # Iterate through list of connected devices
+        for device in self.connected_devices_list:
+            if device == None:
+                continue
+            else:
+                print("Creating thread for device at " + device.ip)
+                t = Thread(target=device.arm())
+                self.threads.append(t)
+                t.start()
+
+        # Wait for the threads to complete and join them
+        for t in self.threads:
+            t.join()
+
+
+    def store_data(self):
+
+        # TODO: maybe this should be moved into threads?
+
+        # Store data recieved by each **connected** device one by one
 
         # Iterate through list of connected devices
         for device in self.connected_devices_list:
@@ -117,7 +145,11 @@ class WhamRedPitayaGroup():
             if device == None:
                 continue
             else:
-                device.arm()
+                device.store()
+
+
+
+
 
 
 
@@ -161,7 +193,7 @@ class WhamRedPitaya():
     data_in = None
 
 
-    def __init__(self, device_node=DEVICE_TREE+".RP_01", ip="192.168.0.150", port=5000, mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
+    def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
 
         # Instance variables:
 
