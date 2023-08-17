@@ -5,6 +5,7 @@ from WhamRedPitaya import WhamRedPitaya
 from WhamRedPitaya import WhamRedPitayaGroup
 
 import numpy as np
+from datetime import datetime
 
 # Create fake data
 cycles_1 = 1000 # how many sine cycles
@@ -45,7 +46,7 @@ rp.mdsplus_tree = MDSPLUS_TREE # name of top mdsplus tree (should always be "wha
 #rp.arm()
 
 rp.data_in = data_in_1
-rp.ip = "test_message"
+rp.ip = str(datetime.now())
 
 
 

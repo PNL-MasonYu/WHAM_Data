@@ -27,11 +27,6 @@ IP_LIST = [
 
 class WhamRedPitayaGroup():
 
-    devices_list = []
-    connected_devices_list = []
-
-    threads = []
-
     def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE):
 
         # Instance variables
@@ -42,8 +37,10 @@ class WhamRedPitayaGroup():
         self.mdsplus_server = mdsplus_server
         self.mdsplus_tree = mdsplus_tree
 
-
-        print(self.num_devices)
+        # Clear lists
+        self.devices_list = []
+        self.connected_devices_list = []
+        self.threads = []
 
         self._create_devices()
 
@@ -67,7 +64,8 @@ class WhamRedPitayaGroup():
             port = self.ip_list[d][1]
 
             # Construct MDSplus node path
-            device_node = ".RP_" + str(d+1).zfill(2)
+            device_node = ".RP_" + str(d+1)
+            #device_node = ".RP_" + str(d+1).zfill(2) # TODO: leading zero in name
             device_node = self.device_tree + device_node
 
             # Create device object
@@ -132,7 +130,7 @@ class WhamRedPitayaGroup():
         for t in self.threads:
             t.join()
 
-
+    '''
     def store_data(self):
 
         # TODO: maybe this should be moved into threads?
@@ -146,10 +144,34 @@ class WhamRedPitayaGroup():
                 continue
             else:
                 device.store()
+    '''
 
 
+    def store_data(self):
 
+        # Python's GIL makes the multithreading here pointless... probably should be removed unless there is a more efficient method of writing data into MDSplus in parallel
 
+        timeStart = time.time()
+
+        # Empty list to manage the threads
+        self.threads = []
+
+        # Iterate through list of connected devices
+        for device in self.connected_devices_list:
+            if device == None:
+                continue
+            else:
+                print("Creating thread for device at " + device.ip)
+                t = Thread(target=device.store())
+                self.threads.append(t)
+                t.start()
+
+        # Wait for the threads to complete and join them
+        for t in self.threads:
+            t.join()
+
+        print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
+        print('Done')
 
 
 
@@ -189,8 +211,7 @@ class WhamRedPitaya():
     STATUS_REG        = 0x000B_0008 # 2 bits : error_ACQ (STS =! 0x80) & data_tvalid_int ('1' when data transfer is done)
     START_ADDR_REG    = 0x000C_0000 # Min value is define by reserved memory in devicetree used to build Linux
 
-    dev = None
-    data_in = None
+
 
 
     def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
@@ -232,6 +253,9 @@ class WhamRedPitaya():
 
 
         self.fs = 125e6 # clock speed, use downsample_value to change sample rate
+
+        self.dev = None
+        self.data_in = None
 
 
     def connect(self):
