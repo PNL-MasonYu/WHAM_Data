@@ -82,11 +82,11 @@ rpg = WhamRedPitayaGroup(num_devices=40, ip_list=IP_LIST, device_tree=DEVICE_TRE
 
 #rpg.configure_devices()
 
-rpg.arm_devices() # This will finish when data is received from all devices
+#rpg.arm_devices() # This will finish when data is received from all devices
 
 
-#rpg.connected_devices_list = rpg.devices_list
-'''
+rpg.connected_devices_list = rpg.devices_list
+
 rpg.connected_devices_list[0].data_in = data_in_1
 rpg.connected_devices_list[1].data_in = data_in_2
 rpg.connected_devices_list[2].data_in = data_in_1
@@ -132,4 +132,3 @@ rpg.connected_devices_list[38].data_in = data_in_1
 rpg.connected_devices_list[39].data_in = data_in_2
 
 rpg.store_data()
-'''
