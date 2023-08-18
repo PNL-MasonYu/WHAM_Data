@@ -1,5 +1,6 @@
 # %%
 from __future__ import print_function
+from collections import UserString
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,7 +32,7 @@ IP_LIST = [
 
 class WhamRedPitayaGroup():
 
-    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE):
+    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE, useTrig=0, continous=0):
 
         # Instance variables
 
@@ -45,6 +46,9 @@ class WhamRedPitayaGroup():
         self.devices_list = []
         self.connected_devices_list = []
         self.threads = []
+
+        self.useTrig = useTrig
+        self.continous = continous
 
         self._create_devices()
 
@@ -72,7 +76,7 @@ class WhamRedPitayaGroup():
             device_node = self.device_tree + device_node
 
             # Create device object
-            device = WhamRedPitaya(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree)
+            device = WhamRedPitaya(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree, useTrig=self.useTrig, continous=self.continous)
 
             # Add to list of device objects
             self.devices_list.append(device)
@@ -193,7 +197,7 @@ class WhamRedPitaya():
 
 
 
-    def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE):
+    def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE, useTrig=0, continous=0):
 
         # Instance variables:
 
@@ -212,10 +216,10 @@ class WhamRedPitaya():
         #### User selection
         self.data_addr = 0x0800_0000 # Min : 0x0800_0000
 
-        self.bUseTrig = 1
+        self.bUseTrig = useTrig
         self.bSave = 0
         self.bPlot = 0
-        self.bContinuous = 1
+        self.bContinuous = continous
         self.bMDS = 1
 
         self.downsample_value = 1 # change from 125 MHz

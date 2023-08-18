@@ -1,17 +1,10 @@
 # %%
 #from MDSplus import * #Connection
 
-from WhamRedPitaya import WhamRedPitaya
-from WhamRedPitaya import WhamRedPitayaGroup
+from WhamRedPitaya import WhamRedPitayaGroup, WhamRedPitaya
 
 import numpy as np
-import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-logging.getLogger().setLevel(logging.INFO)
-
-logging.info("hello")
 
 # Create fake data
 cycles_1 = 300 # how many sine cycles
@@ -85,11 +78,11 @@ IP_LIST = [
 
 rpg = WhamRedPitayaGroup(num_devices=40, ip_list=IP_LIST, device_tree=DEVICE_TREE, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE)
 
-#rpg.connect_devices()
+rpg.connect_devices()
 
-#rpg.configure_devices()
+rpg.configure_devices()
 
-#rpg.arm_devices() # This will finish when data is received from all devices
+rpg.arm_devices() # This will finish when data is received from all devices
 
 
 rpg.connected_devices_list = rpg.devices_list
