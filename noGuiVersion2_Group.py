@@ -5,6 +5,13 @@ from WhamRedPitaya import WhamRedPitaya
 from WhamRedPitaya import WhamRedPitayaGroup
 
 import numpy as np
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logging.getLogger().setLevel(logging.INFO)
+
+logging.info("hello")
 
 # Create fake data
 cycles_1 = 300 # how many sine cycles
@@ -27,13 +34,56 @@ DEVICE_TREE = "ECH.ECH_RAW"
 MDSPLUS_SERVER = "andrew.psl.wisc.edu"
 MDSPLUS_TREE = "wham"
 
+
+
 IP_LIST = [
     ("192.168.0.150", 5000),
-    ("192.168.0.151", 5000)
+    ("192.168.0.151", 5000),
+    ("192.168.0.152", 5000),
+    ("192.168.0.153", 5000),
+    ("192.168.0.154", 5000),
+    ("192.168.0.155", 5000),
+    ("192.168.0.156", 5000),
+    ("192.168.0.157", 5000),
+    ("192.168.0.158", 5000),
+    ("192.168.0.159", 5000),
+
+    ("192.168.0.150", 5000),
+    ("192.168.0.151", 5000),
+    ("192.168.0.152", 5000),
+    ("192.168.0.153", 5000),
+    ("192.168.0.154", 5000),
+    ("192.168.0.155", 5000),
+    ("192.168.0.156", 5000),
+    ("192.168.0.157", 5000),
+    ("192.168.0.158", 5000),
+    ("192.168.0.159", 5000),
+
+    ("192.168.0.150", 5000),
+    ("192.168.0.151", 5000),
+    ("192.168.0.152", 5000),
+    ("192.168.0.153", 5000),
+    ("192.168.0.154", 5000),
+    ("192.168.0.155", 5000),
+    ("192.168.0.156", 5000),
+    ("192.168.0.157", 5000),
+    ("192.168.0.158", 5000),
+    ("192.168.0.159", 5000),
+
+    ("192.168.0.150", 5000),
+    ("192.168.0.151", 5000),
+    ("192.168.0.152", 5000),
+    ("192.168.0.153", 5000),
+    ("192.168.0.154", 5000),
+    ("192.168.0.155", 5000),
+    ("192.168.0.156", 5000),
+    ("192.168.0.157", 5000),
+    ("192.168.0.158", 5000),
+    ("192.168.0.159", 5000)
 ]
 
 
-rpg = WhamRedPitayaGroup(num_devices=2, ip_list=IP_LIST, device_tree=DEVICE_TREE, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE)
+rpg = WhamRedPitayaGroup(num_devices=40, ip_list=IP_LIST, device_tree=DEVICE_TREE, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE)
 
 #rpg.connect_devices()
 
@@ -46,5 +96,46 @@ rpg.connected_devices_list = rpg.devices_list
 
 rpg.connected_devices_list[0].data_in = data_in_1
 rpg.connected_devices_list[1].data_in = data_in_2
+rpg.connected_devices_list[2].data_in = data_in_1
+rpg.connected_devices_list[3].data_in = data_in_2
+rpg.connected_devices_list[4].data_in = data_in_1
+rpg.connected_devices_list[5].data_in = data_in_2
+rpg.connected_devices_list[6].data_in = data_in_1
+rpg.connected_devices_list[7].data_in = data_in_2
+rpg.connected_devices_list[8].data_in = data_in_1
+rpg.connected_devices_list[9].data_in = data_in_2
+
+rpg.connected_devices_list[10].data_in = data_in_1
+rpg.connected_devices_list[11].data_in = data_in_2
+rpg.connected_devices_list[12].data_in = data_in_1
+rpg.connected_devices_list[13].data_in = data_in_2
+rpg.connected_devices_list[14].data_in = data_in_1
+rpg.connected_devices_list[15].data_in = data_in_2
+rpg.connected_devices_list[16].data_in = data_in_1
+rpg.connected_devices_list[17].data_in = data_in_2
+rpg.connected_devices_list[18].data_in = data_in_1
+rpg.connected_devices_list[19].data_in = data_in_2
+
+rpg.connected_devices_list[20].data_in = data_in_1
+rpg.connected_devices_list[21].data_in = data_in_2
+rpg.connected_devices_list[22].data_in = data_in_1
+rpg.connected_devices_list[23].data_in = data_in_2
+rpg.connected_devices_list[24].data_in = data_in_1
+rpg.connected_devices_list[25].data_in = data_in_2
+rpg.connected_devices_list[26].data_in = data_in_1
+rpg.connected_devices_list[27].data_in = data_in_2
+rpg.connected_devices_list[28].data_in = data_in_1
+rpg.connected_devices_list[29].data_in = data_in_2
+
+rpg.connected_devices_list[30].data_in = data_in_1
+rpg.connected_devices_list[31].data_in = data_in_2
+rpg.connected_devices_list[32].data_in = data_in_1
+rpg.connected_devices_list[33].data_in = data_in_2
+rpg.connected_devices_list[34].data_in = data_in_1
+rpg.connected_devices_list[35].data_in = data_in_2
+rpg.connected_devices_list[36].data_in = data_in_1
+rpg.connected_devices_list[37].data_in = data_in_2
+rpg.connected_devices_list[38].data_in = data_in_1
+rpg.connected_devices_list[39].data_in = data_in_2
 
 rpg.store_data()

@@ -11,7 +11,9 @@ import h5py, datetime
 import RP_PLL
 
 from threading import Thread
-from multiprocessing import Process
+from multiprocessing import Process, Manager, Pool
+
+
 
 MDSPLUS_SERVER = "andrew"
 MDSPLUS_TREE = "wham"
@@ -24,6 +26,7 @@ IP_LIST = [
     ("192.168.0.150", 5000),
     ("192.168.0.151", 5000)
 ]
+
 
 
 class WhamRedPitayaGroup():
@@ -65,7 +68,7 @@ class WhamRedPitayaGroup():
             port = self.ip_list[d][1]
 
             # Construct MDSplus node path
-            device_node = ".RP_" + str(d+1).zfill(2) # TODO: leading zero in name
+            device_node = ".RP_" + str(d+1).zfill(2)
             device_node = self.device_tree + device_node
 
             # Create device object
@@ -130,81 +133,29 @@ class WhamRedPitayaGroup():
         for t in self.threads:
             t.join()
 
-    '''
+
     def store_data(self):
-
-        # TODO: maybe this should be moved into threads?
-
-        # Store data recieved by each **connected** device one by one
-
-        # Iterate through list of connected devices
-        for device in self.connected_devices_list:
-
-            if device == None:
-                continue
-            else:
-                device.store()
-    '''
-
-    '''
-    def store_data(self):
-
-        # Python's GIL makes the multithreading here pointless... probably should be removed unless there is a more efficient method of writing data into MDSplus in parallel
 
         timeStart = time.time()
 
-        # Empty list to manage the threads
-        self.threads = []
+        # Open process pool
+        with Pool() as pool: 
 
-        # Iterate through list of connected devices
-        for device in self.connected_devices_list:
-            if device == None:
-                continue
-            else:
-                print("Creating thread for device at " + device.ip)
-                t = Thread(target=device.store())
-                self.threads.append(t)
-                t.start()
+            # Submit process jobs in parallel
+            result = pool.map_async(self._store_data, self.connected_devices_list)
 
-        # Wait for the threads to complete and join them
-        for t in self.threads:
-            t.join()
+            result.get() # Wait for processes to complete
 
-        print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
-        print('Done')
-    '''
-
-
-
-    def store_data(self):
-
-        # Python's GIL makes the multithreading here pointless... probably should be removed unless there is a more efficient method of writing data into MDSplus in parallel
-
-        timeStart = time.time()
-
-        procs = []
-
-        # Iterate through list of connected devices
-        for device in self.connected_devices_list:
-            if device == None:
-                continue
-            else:
-                print("Creating process for device at " + device.ip)
-                proc = Process(target=device.store())
-                procs.append(proc)
-                proc.start()
-
-
-        # Wait for the processes to complete and join them
-        for proc in procs:
-            proc.join()
+            # Close process pool
+            pool.close()
+            pool.join()
 
         print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
         print('Done')
 
-
-
-
+    # Wrapper function for device.store()
+    def _store_data(self, device):
+        return device.store()
     
 
 
@@ -284,6 +235,7 @@ class WhamRedPitaya():
 
         self.dev = None
         self.data_in = None
+
 
 
     def connect(self):
@@ -404,13 +356,19 @@ class WhamRedPitaya():
         conn.closeTree(self.mdsplus_tree, 0)
 
 
+
     def write_mdsplus(self, conn):
 
         # Get current shot number using TDI expression
         shot_num = conn.get('$shot') 
-        print("Writing data to shot number: " + shot_num) 
-        print("Writing data to node: " + self.device_node) 
+
+        msg1 = "Writing data to shot number: " + shot_num
+        msg2 = "Writing data to node: " + self.device_node
+
+        print(msg1) 
+        print(msg2) 
         
+
         # Write (put) the data to the device in MDSplus
         if self.channel == 3 and not(self.ADC1_counter == 1 and self.ADC2_counter == 1):
             conn.put(self.device_node+":CH_01", "$", np.int16(self.data_in[1::2]))
