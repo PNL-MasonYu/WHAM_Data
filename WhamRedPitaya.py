@@ -11,6 +11,7 @@ import h5py, datetime
 import RP_PLL
 
 from threading import Thread
+from multiprocessing import Process
 
 MDSPLUS_SERVER = "andrew"
 MDSPLUS_TREE = "wham"
@@ -64,8 +65,7 @@ class WhamRedPitayaGroup():
             port = self.ip_list[d][1]
 
             # Construct MDSplus node path
-            device_node = ".RP_" + str(d+1)
-            #device_node = ".RP_" + str(d+1).zfill(2) # TODO: leading zero in name
+            device_node = ".RP_" + str(d+1).zfill(2) # TODO: leading zero in name
             device_node = self.device_tree + device_node
 
             # Create device object
@@ -146,7 +146,7 @@ class WhamRedPitayaGroup():
                 device.store()
     '''
 
-
+    '''
     def store_data(self):
 
         # Python's GIL makes the multithreading here pointless... probably should be removed unless there is a more efficient method of writing data into MDSplus in parallel
@@ -172,7 +172,35 @@ class WhamRedPitayaGroup():
 
         print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
         print('Done')
+    '''
 
+
+
+    def store_data(self):
+
+        # Python's GIL makes the multithreading here pointless... probably should be removed unless there is a more efficient method of writing data into MDSplus in parallel
+
+        timeStart = time.time()
+
+        procs = []
+
+        # Iterate through list of connected devices
+        for device in self.connected_devices_list:
+            if device == None:
+                continue
+            else:
+                print("Creating process for device at " + device.ip)
+                proc = Process(target=device.store())
+                procs.append(proc)
+                proc.start()
+
+
+        # Wait for the processes to complete and join them
+        for proc in procs:
+            proc.join()
+
+        print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
+        print('Done')
 
 
 
