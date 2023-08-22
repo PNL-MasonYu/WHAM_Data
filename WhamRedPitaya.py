@@ -32,7 +32,7 @@ IP_LIST = [
 
 class WhamRedPitayaGroup():
 
-    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE, useTrig=0, continous=0):
+    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE, useTrig=1, continous=1):
 
         # Instance variables
 
@@ -148,7 +148,7 @@ class WhamRedPitayaGroup():
             # Submit process jobs in parallel
             result = pool.map_async(self._store_data, self.connected_devices_list)
 
-            result.get() # Wait for processes to complete
+            #result.get() # Wait for processes to complete
 
             # Close process pool
             pool.close()
@@ -197,7 +197,7 @@ class WhamRedPitaya():
 
 
 
-    def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE, useTrig=0, continous=0):
+    def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE, useTrig=1, continous=1):
 
         # Instance variables:
 
@@ -298,16 +298,18 @@ class WhamRedPitaya():
 
         time.sleep(self.n_pts/self.fs) 
 
-        while self.bContinuous:
+        #while self.bContinuous: # TODO: where to  move this?
             
-            # read status (0b10 = error // 0b01 = data_valid // 0b00 = not_ready)
-            status = 0
+        # read status (0b10 = error // 0b01 = data_valid // 0b00 = not_ready)
+        status = 0
 
-            while status == 0:
-                status = self.dev.read_Zynq_AXI_register_uint32(self.STATUS_REG)
-                time.sleep(1e-1)
+        # Block until data is ready
+        while status == 0:
+            status = self.dev.read_Zynq_AXI_register_uint32(self.STATUS_REG)
+            time.sleep(1e-1)
                 
-            self._read()
+        # Read data after status register changes
+        self._read()
 
 
 
