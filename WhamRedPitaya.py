@@ -10,6 +10,7 @@ from MDSplus import connection
 import time
 #import h5py
 import datetime
+from datetime import datetime
 import RP_PLL
 
 from threading import Thread
@@ -142,13 +143,19 @@ class WhamRedPitayaGroup():
 
         timeStart = time.time()
 
+
+        print(self.connected_devices_list)
+
         # Open process pool
         with Pool() as pool: 
 
             # Submit process jobs in parallel
-            result = pool.map_async(self._store_data, self.connected_devices_list)
+            result = pool.map_async(store_data, self.connected_devices_list)
 
-            #result.get() # Wait for processes to complete
+            result.wait()
+            z = result.get() # Wait for processes to complete
+
+            print(z)
 
             # Close process pool
             pool.close()
@@ -157,9 +164,9 @@ class WhamRedPitayaGroup():
         print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
         print('Done')
 
-    # Wrapper function for device.store()
-    def _store_data(self, device):
-        return device.store()
+# Wrapper function for device.store()
+def store_data(device):
+    return device.store()
     
 
 
@@ -377,7 +384,7 @@ class WhamRedPitaya():
             conn.put(self.device_node+":CH_01", "$", np.int16(self.data_in[1::2]))
             conn.put(self.device_node+":CH_02", "$", np.int16(self.data_in[::2]))
             conn.put(self.device_node+":FREQ", "$", self.fs)
-            conn.put(self.device_node+":NAME", "$", self.ip) # TODO: need to change this to IP
+            conn.put(self.device_node+":NAME", "$", self.ip + " " + str(datetime.now())) # TODO: need to change this to IP
 
             #conn.put("RAW:RP_F0918A:CH_01", "$", np.int16(self.data_in[1::2]))
             #conn.put("RAW:RP_F0918A:CH_02", "$", np.int16(self.data_in[::2]))
