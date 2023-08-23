@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 from MDSplus import connection
 
 import time
-import h5py, datetime
+#import h5py
+import datetime
 import RP_PLL
 
 from threading import Thread
@@ -32,7 +33,7 @@ IP_LIST = [
 
 class WhamRedPitayaGroup():
 
-    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE, useTrig=1, continous=1):
+    def __init__(self, num_devices=2, ip_list=IP_LIST, device_tree=None, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE, useTrig=1):
 
         # Instance variables
 
@@ -48,7 +49,6 @@ class WhamRedPitayaGroup():
         self.threads = []
 
         self.useTrig = useTrig
-        self.continous = continous
 
         self._create_devices()
 
@@ -76,7 +76,7 @@ class WhamRedPitayaGroup():
             device_node = self.device_tree + device_node
 
             # Create device object
-            device = WhamRedPitaya(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree, useTrig=self.useTrig, continous=self.continous)
+            device = WhamRedPitaya(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree, useTrig=self.useTrig)
 
             # Add to list of device objects
             self.devices_list.append(device)
@@ -197,7 +197,7 @@ class WhamRedPitaya():
 
 
 
-    def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE, useTrig=1, continous=1):
+    def __init__(self, ip="192.168.0.150", port=5000, device_node=DEVICE_TREE+".RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE, useTrig=1):
 
         # Instance variables:
 
@@ -219,7 +219,6 @@ class WhamRedPitaya():
         self.bUseTrig = useTrig
         self.bSave = 0
         self.bPlot = 0
-        self.bContinuous = continous
         self.bMDS = 1
 
         self.downsample_value = 1 # change from 125 MHz
@@ -297,8 +296,6 @@ class WhamRedPitaya():
             self.dev.write_Zynq_AXI_register_uint32(self.TRIG_REG, 0)
 
         time.sleep(self.n_pts/self.fs) 
-
-        #while self.bContinuous: # TODO: where to  move this?
             
         # read status (0b10 = error // 0b01 = data_valid // 0b00 = not_ready)
         status = 0
