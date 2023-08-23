@@ -85,10 +85,9 @@ if __name__ == '__main__':
 
     rpg.connect_devices()
 
-    rpg.configure_devices()
-
-
     while True:
+
+        rpg.configure_devices()
 
         rpg.arm_devices() # This will finish when data is received from all devices
 
