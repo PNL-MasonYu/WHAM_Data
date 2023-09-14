@@ -27,15 +27,16 @@ DEVICE_TREE = "ECH.ECH_RAW"
 MDSPLUS_SERVER = "andrew.psl.wisc.edu"
 MDSPLUS_TREE = "wham"
 
-'''
+
 IP_LIST = [
-    ("192.168.0.150", 5000)
+    ("192.168.0.152", 5000),
+    ("192.168.0.151", 5000)
 ]
+
+
+NUM_DEVICES = 2
+
 '''
-
-NUM_DEVICES = 40
-
-
 IP_LIST = []
 for i in range(0,NUM_DEVICES):
 
@@ -43,13 +44,13 @@ for i in range(0,NUM_DEVICES):
     print(ip)
 
     IP_LIST.append(ip)
-
+'''
 
 
 
 
 if __name__ == '__main__':
-    rpg = WhamRedPitayaGroup(num_devices=NUM_DEVICES, ip_list=IP_LIST, device_tree=DEVICE_TREE, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE, useTrig=1)
+    rpg = WhamRedPitayaGroup(num_devices=NUM_DEVICES, ip_list=IP_LIST, device_tree=DEVICE_TREE, mdsplus_server=MDSPLUS_SERVER, mdsplus_tree=MDSPLUS_TREE, useTrig=0)
 
     # Repeat until device connection
     while True:
@@ -63,21 +64,10 @@ if __name__ == '__main__':
 
         rpg.configure_devices()
 
-        print(len(rpg.devices_list))
-        print(len(rpg.connected_devices_list))
-
         rpg.arm_devices() # This will finish when data is received from all devices
-
-        backup_list = rpg.connected_devices_list
-
-        rpg.connected_devices_list = rpg.devices_list
-
-        data = rpg.connected_devices_list[0].data_in
-
-        for i in range(1,NUM_DEVICES):
-            print(i)
-            rpg.connected_devices_list[i].data_in = data
-
+        
+        rpg.connected_devices_list[1].bPlot = 1
+        rpg.connected_devices_list[1].bMDS = 0
+        rpg.connected_devices_list[0].bMDS = 0
+        
         rpg.store_data()
-
-        rpg.connected_devices_list = backup_list

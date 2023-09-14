@@ -130,9 +130,10 @@ class WhamRedPitayaGroup():
                 continue
             else:
                 print("Creating thread for device at " + device.ip)
-                t = Thread(target=device.arm())
+                t = Thread(target=device.arm)
                 self.threads.append(t)
                 t.start()
+                
 
         # Wait for the threads to complete and join them
         for t in self.threads:
@@ -143,9 +144,6 @@ class WhamRedPitayaGroup():
 
         timeStart = time.time()
 
-
-        print(self.connected_devices_list)
-
         # Open process pool
         with Pool() as pool: 
 
@@ -154,8 +152,6 @@ class WhamRedPitayaGroup():
 
             result.wait()
             z = result.get() # Wait for processes to complete
-
-            print(z)
 
             # Close process pool
             pool.close()
@@ -230,7 +226,7 @@ class WhamRedPitaya():
 
         self.downsample_value = 1 # change from 125 MHz
 
-        self.n_pts = 5e6 # if both channel, this is n_pts1 + n_pts2 ##If you want max, just put a large number
+        self.n_pts = 1e7 # if both channel, this is n_pts1 + n_pts2 ##If you want max, just put a large number
         self.channel = 3 # 1 or 2 or 3 for both
         self.fileName = 'data_saving/8-08-23/shot.bin'
         self.shot_num = 0
@@ -270,7 +266,6 @@ class WhamRedPitaya():
         self.downsample_value = max(1,self.downsample_value)
 
         self.dev.write_Zynq_AXI_register_uint32(self.DOWNSAMPLE_REG, self.downsample_value-1)
-        self.fs = self.fs/self.downsample_value
 
         #Reset DMA FSM (active low)
         self.dev.write_Zynq_AXI_register_uint32(self.RESET_DMA_REG, 0)
@@ -302,8 +297,10 @@ class WhamRedPitaya():
             self.dev.write_Zynq_AXI_register_uint32(self.TRIG_REG, 1) # Start with trig need to stay high to register external trig
             self.dev.write_Zynq_AXI_register_uint32(self.TRIG_REG, 0)
 
-        time.sleep(self.n_pts/self.fs) 
-            
+        duration = self.n_pts/(self.fs/self.downsample_value)
+        print("Acquiring for " + str(duration) + " seconds")
+        time.sleep(duration) 
+        
         # read status (0b10 = error // 0b01 = data_valid // 0b00 = not_ready)
         status = 0
 
@@ -346,8 +343,6 @@ class WhamRedPitaya():
         self.data_in = np.fromstring(self.data_in, dtype=np.int16) # Uncomment this line if you want to read data as 16 bits
         print('Elapsed time for conversion = {}'.format(time.time() - timeStart))
         
-        #2.5 million samples
-
     
     def _write_mdsplus(self):
         
@@ -381,9 +376,9 @@ class WhamRedPitaya():
 
         # Write (put) the data to the device in MDSplus
         if self.channel == 3 and not(self.ADC1_counter == 1 and self.ADC2_counter == 1):
-            conn.put(self.device_node+":CH_01", "$", np.int16(self.data_in[1::2]))
-            conn.put(self.device_node+":CH_02", "$", np.int16(self.data_in[::2]))
-            conn.put(self.device_node+":FREQ", "$", self.fs)
+            conn.put(self.device_node+":CH_01", "$", self.data_in[1::2])
+            conn.put(self.device_node+":CH_02", "$", self.data_in[::2])
+            conn.put(self.device_node+":FREQ", "$", self.fs/self.downsample_value)
             conn.put(self.device_node+":NAME", "$", self.ip + " " + str(datetime.now())) # TODO: need to change this to IP
 
             #conn.put("RAW:RP_F0918A:CH_01", "$", np.int16(self.data_in[1::2]))
@@ -437,7 +432,7 @@ class WhamRedPitaya():
 
     def _write_plots(self):
         if self.channel == 3:
-            time_scale = np.linspace(0, 1/self.fs*len(self.data_in[::2]), len(self.data_in[::2]))
+            time_scale = np.linspace(0, 1/(self.fs/self.downsample_value)*len(self.data_in[::2]), len(self.data_in[::2]))
             plt.plot(time_scale, self.data_in[::2])
             plt.plot(time_scale, self.data_in[1::2])
             plt.show()
