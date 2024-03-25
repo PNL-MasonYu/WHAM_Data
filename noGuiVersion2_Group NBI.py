@@ -44,6 +44,7 @@ if __name__ == '__main__':
             device.bMDS = 1
             device.bPlot = 1
             device.channel = 3
+            #device.trig = "NOW"
         
         rpg.configure_devices()
 

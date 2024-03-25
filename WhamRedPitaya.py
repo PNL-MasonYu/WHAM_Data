@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 from MDSplus import connection
 import redpitaya_scpi as scpi
 
+import paramiko
 import time
 #import h5py
-import datetime
 from datetime import datetime
 import RP_PLL
 
@@ -213,15 +213,25 @@ class WhamRedPitaya_SCPI():
         self.bPlot = 1
         self.bMDS = 1
 
+        self.verbosity = 1
+
         self.shot_num = shot_num
 
 
     def connect(self):
-
-        print("Connecting to device at " + self.ip + " on port " + str(self.port) + ".")
+        if self.verbosity > 0:
+            print("Connecting to device at " + self.ip + " on port " + str(self.port) + ".")
         self.dev = scpi.scpi(self.ip)
         self.dev.tx_txt('ACQ:RST')
 
+    def set_buffer_size(self):
+        # close any existing SCPI connection first
+        self.close()
+        # establish ssh tunnel
+        client = paramiko.SSHClient()
+        client.connect(self.ip, username="root", password="root")
+        # TODO: edit the file and rebuild tree here, has to go through a reboot!!!
+        client.close()
 
     def configure(self):
 
@@ -229,34 +239,43 @@ class WhamRedPitaya_SCPI():
         self.downsample_value = min(2**32,self.downsample_value)
         self.downsample_value = max(1,self.downsample_value)
         
-        self.dev.tx_txt('ACQ:DATA:FORMAT ASCII')
+        self.dev.tx_txt('ACQ:DATA:FORMAT BIN')
         self.dev.tx_txt('ACQ:AXI:DATA:UNITS VOLTS')
-        print('ACQ:AXI:DATA:UNITS?: ',self.dev.txrx_txt('ACQ:AXI:DATA:UNITS?'))
+        self.dev.tx_txt('ACQ:SOUR1:GAIN HV')
+        self.dev.tx_txt('ACQ:SOUR2:GAIN HV')
+        if self.verbosity > 0:
+            print('ACQ:AXI:DATA:UNITS?: ',self.dev.txrx_txt('ACQ:AXI:DATA:UNITS?'))
+            print('ACQ:SOUR1:GAIN?: ',self.dev.txrx_txt('ACQ:SOUR1:GAIN?'))
+            print('ACQ:SOUR2:GAIN?: ',self.dev.txrx_txt('ACQ:SOUR2:GAIN?'))
         self.dev.check_error()
         
-        # Set the decimation value
+        # Set the decimation valueConnection
         self.dev.tx_txt('ACQ:AXI:DEC ' + str(int(self.downsample_value)))
-        print('ACQ:AXI:DEC?: ',self.dev.txrx_txt('ACQ:AXI:DEC?'))
+        if self.verbosity > 0:
+            print('ACQ:AXI:DEC?: ',self.dev.txrx_txt('ACQ:AXI:DEC?'))
         self.dev.check_error()
 
         # Get AXI start address and size of buffer
         start = int(self.dev.txrx_txt('ACQ:AXI:START?'))
         size = int(self.dev.txrx_txt('ACQ:AXI:SIZE?'))
-        print('ACQ:AXI:START?: ' + str(start))
-        print('ACQ:AXI:SIZE?: ' + str(size))
-        if self.n_pts > (size // 2): #2 bytes per data point
-            print("too many data points, truncating from {:.3e} to {:.3e} points".format(self.n_pts, (size // 2)))
-            self.n_pts = (size // 2)
+        if self.verbosity > 0:
+            print('ACQ:AXI:START?: ' + str(start))
+            print('ACQ:AXI:SIZE?: ' + str(size))
+        #if self.n_pts > (size // 2): #2 bytes per data point
+        #    print("too many data points, truncating from {:.3e} to {:.3e} points".format(self.n_pts, (size // 2)))
+        #    self.n_pts = (size // 2)
         self.dev.check_error()
 
-        print("Start address ",start," size of aviable memory ",size)
-        print("Number of samples to capture per channel " + str(self.n_pts))
+        if self.verbosity > 0:
+            print("Start address ",start," size of aviable memory ",size)
+            print("Number of samples to capture per channel " + str(self.n_pts))
 
         # Specify the buffer sizes in bytes for the first and second channels
         add_str_ch1 = 'ACQ:AXI:SOUR1:SET:Buffer ' + str(start) + ',' + str(size//2)
         add_str_ch2 = 'ACQ:AXI:SOUR2:SET:Buffer ' + str(start + size // 2) + ',' + str(size//2)
-        print(add_str_ch1)
-        print(add_str_ch2)
+        if self.verbosity > 0:
+            print("set channel 1 address: " + add_str_ch1)
+            print("set channel 2 address: " + add_str_ch2)
 
         self.dev.tx_txt(add_str_ch1)
         self.dev.tx_txt(add_str_ch2)
@@ -299,6 +318,8 @@ class WhamRedPitaya_SCPI():
 
 
     def _read(self):
+
+                
         print("Start receiving data")
         timeStart = time.time()
         # It is quite difficult for the server to transfer a large amount of data at once, and there may not be enough memory with a very large capture buffer. 
@@ -307,7 +328,7 @@ class WhamRedPitaya_SCPI():
         if self.channel == 1 or self.channel == 2:
             # single channel receiving, TODO: debug
             received_size = 0
-            block_size = self.n_pts // 2 #50000
+            block_size = 2**18 // 2 #50000
             buff_all = []
             trig = int(self.dev.txrx_txt('ACQ:AXI:SOUR1:Trig:Pos?'))
 
@@ -319,7 +340,7 @@ class WhamRedPitaya_SCPI():
                 buff_byte = self.dev.rx_arb()
                 if buff_byte == False:
                     continue
-                buff = [struct.unpack('!h',bytearray(buff_byte[i:i+2]))[0] for i in range(0, len(buff_byte), 2)]
+                buff = [struct.unpack('!f',bytearray(buff_byte[i:i+4]))[0] for i in range(0, len(buff_byte), 4)]
                 buff_all = np.append(buff_all, buff)
                 trig += block_size
                 trig = trig % self.n_pts
@@ -329,13 +350,14 @@ class WhamRedPitaya_SCPI():
         
         if self.channel == 3:
             # dual channel receiving, TODO: debug
-            trig_ch1 = self.dev.txrx_txt('ACQ:AXI:SOUR1:Trig:Pos?')
-            trig_ch2 = self.dev.txrx_txt('ACQ:AXI:SOUR2:Trig:Pos?')
+            trig_ch1 = int(self.dev.txrx_txt('ACQ:AXI:SOUR1:Trig:Pos?'))
+            trig_ch2 = int(self.dev.txrx_txt('ACQ:AXI:SOUR2:Trig:Pos?'))
             # Binary data receiving
-            """
+            
             buff_all1 = []
             buff_all2 = []
-            block_size = 50000 #self.n_pts // 2
+            block_size = 2**18 #self.n_pts // 2
+            received_size = 0
             while received_size < self.n_pts:
                 if (received_size + block_size) > self.n_pts:
                     block_size = self.n_pts - received_size
@@ -344,28 +366,37 @@ class WhamRedPitaya_SCPI():
                 self.dev.tx_txt('ACQ:AXI:SOUR2:DATA:Start:N? ' + str(trig_ch2)+',' + str(block_size))
                 buff_byte2 = self.dev.rx_arb()
 
-                buff1 = [struct.unpack('!h',bytearray(buff_byte1[i:i+2]))[0] for i in range(0, len(buff_byte1), 2)]
-                buff2 = [struct.unpack('!h',bytearray(buff_byte2[i:i+2]))[0] for i in range(0, len(buff_byte2), 2)]
+                buff1 = [struct.unpack('!f',bytearray(buff_byte1[i:i+4]))[0] for i in range(0, len(buff_byte1), 4)]
+                buff2 = [struct.unpack('!f',bytearray(buff_byte2[i:i+4]))[0] for i in range(0, len(buff_byte2), 4)]
                 buff_all1 = np.append(buff_all1, buff1)
-                trig += block_size
-                trig = trig % self.n_pts
+                buff_all2 = np.append(buff_all2, buff2)
+                trig_ch1 += block_size
+                trig_ch1 = trig_ch1 % self.n_pts
+                
+                trig_ch2 += block_size
+                trig_ch2 = trig_ch2 % self.n_pts
                 received_size += block_size
+            self.data_ch1 = np.array(buff_all1)
+            self.data_ch2 = np.array(buff_all2)
+            print("ch1 data size " + str(len(self.data_ch1)))
+            print("ch2 data size " + str(len(self.data_ch2)))
             """
             # ASCII data receiving
-            print("receiving ASCII data from Ch1 from :" + str(trig_ch1))
+            print(self.ip + " receiving ASCII data from Ch1 from :" + str(trig_ch1))
             self.dev.tx_txt('ACQ:AXI:SOUR1:DATA:Start:N? ' + str(trig_ch1)+',' + str(self.n_pts))
             buff_string = self.dev.rx_txt()
-            print("receiving ASCII data from Ch2 from :" + str(trig_ch2))
+            print(self.ip + " receiving ASCII data from Ch2 from :" + str(trig_ch2))
             self.dev.tx_txt('ACQ:AXI:SOUR2:DATA:Start:N? ' + str(trig_ch2)+',' + str(self.n_pts))
             buff_string2 = self.dev.rx_txt()
-            print("done receiving")
+            
             
             buff_string = buff_string.strip('{}\n\r').replace("  ", "").split(',')
-            self.data_ch1 = np.array(buff_string, dtype=np.float64) * 20#list(map(np.float64, buff_string))
+            self.data_ch1 = np.array(buff_string, dtype=np.float64)    #list(map(np.float64, buff_string))
 
             buff_string2 = buff_string2.strip('{}\n\r').replace("  ", "").split(',')
-            self.data_ch2 = np.array(buff_string2, dtype=np.float64) *20#list(map(np.float64, buff_string2))
-
+            self.data_ch2 = np.array(buff_string2, dtype=np.float64)   #list(map(np.float64, buff_string2))
+            """
+            print("done receiving")
             #print(self.data_ch1[:100])
             
             self.dev.tx_txt('ACQ:AXI:SOUR1:ENable OFF')
@@ -394,15 +425,6 @@ class WhamRedPitaya_SCPI():
         conn.put(self.device_node+":FREQ", "$", self.fs/self.downsample_value)
         conn.put(self.device_node+":NAME", "$", self.ip + " " + str(datetime.now()))
 
-        #conn.put("RAW:RP_F0918A:CH_01", "$", np.int16(self.data_in[1::2]))
-        #conn.put("RAW:RP_F0918A:CH_02", "$", np.int16(self.data_in[::2]))
-        #conn.put("RAW:RP_F0918A:FREQ", "$", self.fs)
-
-        #conn.put("ECH:ECH_RAW:RP_1:CH_01", "$", np.int16(self.data_in[1::2]))
-        #conn.put("ECH:ECH_RAW:RP_1:CH_02", "$", np.int16(self.data_in[::2]))
-        #conn.put("ECH:ECH_RAW:RP_1:FREQ", "$", self.fs)
-        #conn.put("ECH:ECH_RAW:RP_1:NAME", "$", self.IP) # need to change this to IP
-
     def _write_mdsplus(self):
         
         # No remote connection to MDSplus is provided so create a new one
@@ -410,8 +432,8 @@ class WhamRedPitaya_SCPI():
         # Establish new remote connection to MDSplus
         conn = connection.Connection(self.mdsplus_server) # Connect to MDSplus server (andrew)
         
-        # Open the tree and latest shot
-        conn.openTree(self.mdsplus_tree, 0)
+        # Open the tree
+        conn.openTree(self.mdsplus_tree, self.shot_num)
 
         # Write the data
         self.write_mdsplus(conn)
@@ -459,7 +481,9 @@ class WhamRedPitaya_SCPI():
         print('Done')
     
     def close(self):
-        self.dev.close()
+        if not self.dev == None:
+            self.dev.close()
+            self.dev = None
 
 
 

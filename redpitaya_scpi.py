@@ -57,12 +57,17 @@ class scpi (object):
         while len(data) != 1:
             data = self._socket.recv(1)
         if data != b'#':
-            return False
+            if data == b'\r':
+                self._socket.recv(1)
+                self._socket.recv(1)
+            else:
+                return False
         data=b''
 
         while len(data) != 1:
             data = self._socket.recv(1)
         numOfNumBytes = int(data)
+        
         if numOfNumBytes <= 0:
             return False
         data=b''
@@ -70,11 +75,12 @@ class scpi (object):
         while len(data) != numOfNumBytes:
             data += (self._socket.recv(1))
         numOfBytes = int(data)
+        #print("receiving " + str(numOfBytes) + " Bytes")
         data=b''
-
         while len(data) < numOfBytes:
-            r_size = min(numOfBytes - len(data),4096)
+            r_size = min(numOfBytes - len(data),2**16)
             data += (self._socket.recv(r_size))
+
         return data
 
     def tx_txt(self, msg):

@@ -21,6 +21,8 @@ class picoscope5000():
         self.device_node = device_node
         if not shot_num == None:
             self.shot_num = str(shot_num)
+        else:
+            self.shot_num = None
         
 
         self.coupling = coupling
@@ -269,10 +271,10 @@ class picoscope5000():
         chCRange = ps.PS5000A_RANGE[self.range[2]]
         chDRange = ps.PS5000A_RANGE[self.range[3]]
         #print(bufferAMax[:100])
-        self.mVChA =  np.array(adc2mV(bufferAMax, chARange, self.maxADC))
-        self.mVChB =  np.array(adc2mV(bufferBMax, chBRange, self.maxADC))
-        self.mVChC =  np.array(adc2mV(bufferCMax, chCRange, self.maxADC))
-        self.mVChD =  np.array(adc2mV(bufferDMax, chDRange, self.maxADC))
+        self.mVChA =  np.array(adc2mV(bufferAMax, chARange, self.maxADC), dtype=np.float64)
+        self.mVChB =  np.array(adc2mV(bufferBMax, chBRange, self.maxADC), dtype=np.float64)
+        self.mVChC =  np.array(adc2mV(bufferCMax, chCRange, self.maxADC), dtype=np.float64)
+        self.mVChD =  np.array(adc2mV(bufferDMax, chDRange, self.maxADC), dtype=np.float64)
 
     def _write_mdsplus(self):
         
@@ -281,14 +283,14 @@ class picoscope5000():
         # Establish new remote connection to MDSplus
         conn = connection.Connection(self.mdsplus_server) # Connect to MDSplus server (andrew)
         
-        # Open the tree and latest shot
-        conn.openTree(self.mdsplus_tree, 0)
+        # Open the tree
+        conn.openTree(self.mdsplus_tree, self.shot_num)
 
         # Write the data
         self.write_mdsplus(conn)
 
-        # Close the tree and latest shot
-        conn.closeTree(self.mdsplus_tree, 0)
+        # Close the tree
+        conn.closeTree(self.mdsplus_tree, self.shot_num)
 
     def write_mdsplus(self, conn):
         if self.shot_num == None:
@@ -302,13 +304,13 @@ class picoscope5000():
         # Write (put) the data to the device in MDSplus
         # TODO: make channels 1 and 2 individually work as well
         conn.put(self.device_node+":CH_01", "$", self.mVChA[:] * 1000)
-        #print("Ch1 written")
+        print("Ch1 written")
         conn.put(self.device_node+":CH_02", "$", self.mVChB[:] * 1000)
-        #print("Ch2 written")
+        print("Ch2 written")
         conn.put(self.device_node+":CH_03", "$", self.mVChC[:] * 1000)
-        #print("Ch3 written")
+        print("Ch3 written")
         conn.put(self.device_node+":CH_04", "$", self.mVChD[:] * 1000)
-        #print("Ch4 written")
+        print("Ch4 written")
         conn.put(self.device_node+":DELAY", "$", np.float64(self.sample_interval*self.samples_pretrig))
         conn.put(self.device_node+":FREQ", "$", np.float64(1/self.sample_interval))
         conn.put(self.device_node+":NAME", "$", "model: " + str(self.info.variant) + " serial:" + str(self.info.serial) + " time:" + str(datetime.now()))
@@ -324,17 +326,17 @@ class picoscope5000():
             fig.suptitle(str(self.info.variant) + " serial:" + str(self.info.serial))
             
             trig_time = self.sample_interval*self.samples_pretrig
-            axs[0].plot(time, self.mVChA[:], linewidth=0.5)
-            axs[0].axvline(trig_time, linestyle="--")
+            axs[0].plot(time, self.mVChA[:], linewidth=0.2)
+            axs[0].axvline(trig_time, linestyle="--", color="r")
             axs[0].set_title("Channel A")
             axs[1].plot(time, self.mVChB[:], linewidth=0.2)
-            axs[1].axvline(trig_time)
+            axs[1].axvline(trig_time, linestyle="--", color="r")
             axs[1].set_title("Channel B")
-            axs[2].plot(time, self.mVChC[:])
-            axs[2].axvline(trig_time)
+            axs[2].plot(time, self.mVChC[:], linewidth=0.2)
+            axs[2].axvline(trig_time, linestyle="--", color="r")
             axs[2].set_title("Channel C")
-            axs[3].plot(time, self.mVChD[:])
-            axs[3].axvline(trig_time)
+            axs[3].plot(time, self.mVChD[:], linewidth=0.2)
+            axs[3].axvline(trig_time, linestyle="--", color="r")
             axs[3].set_title("Channel D")
 
             plt.xlabel('Time (ms)')
@@ -372,7 +374,7 @@ class picoscope5000():
         assert_pico_ok(self.status["setSigGenBuiltInV2"])
 
 if __name__ == "__main__":
-    pico = picoscope5000(sample_interval=4e-9, samples_posttrig=6e5, samples_pretrig=1e6, trig_level=0.5, shot_num="231130009")
+    pico = picoscope5000(sample_interval=4e-9, samples_posttrig=6e5, samples_pretrig=1e6, trig_level=0.25, shot_num=None)
     pico.connect()
     pico.configure()
     pico.awg_sine(1e3, 1, 10000)
