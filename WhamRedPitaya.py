@@ -334,7 +334,7 @@ class WhamRedPitaya_SCPI():
         if self.channel == 1 or self.channel == 2:
             # single channel receiving, TODO: debug
             received_size = 0
-            block_size = 2**18 // 2 #50000
+            block_size = 2**18  #50000
             buff_all = []
             trig = int(self.dev.txrx_txt('ACQ:AXI:SOUR1:Trig:Pos?'))
 
@@ -362,11 +362,17 @@ class WhamRedPitaya_SCPI():
             
             buff_all1 = []
             buff_all2 = []
-            block_size = 2**18 // 2 #self.n_pts // 2
+            block_size = 2**18  #self.n_pts // 2
             received_size = 0
             while received_size < self.n_pts:
-                if (received_size + block_size) > self.n_pts:
-                    block_size = self.n_pts - received_size
+                # Check if the block size would bring us over the total number of points
+                if (received_size + block_size) >= self.n_pts:
+                    # minus one to get rid of one excess data point
+                    block_size = self.n_pts - received_size - 1
+                    received_size = self.n_pts
+                else:
+                    # update received data size
+                    received_size += block_size
                 self.dev.tx_txt('ACQ:AXI:SOUR1:DATA:Start:N? ' + str(trig_ch1)+',' + str(block_size))
                 buff_byte1 = self.dev.rx_arb()
                 self.dev.tx_txt('ACQ:AXI:SOUR2:DATA:Start:N? ' + str(trig_ch2)+',' + str(block_size))
@@ -377,11 +383,9 @@ class WhamRedPitaya_SCPI():
                 buff_all1 = np.append(buff_all1, buff1)
                 buff_all2 = np.append(buff_all2, buff2)
                 trig_ch1 += block_size
-                trig_ch1 = trig_ch1 % self.n_pts
                 
                 trig_ch2 += block_size
-                trig_ch2 = trig_ch2 % self.n_pts
-                received_size += block_size
+                                
             self.data_ch1 = np.array(buff_all1)
             self.data_ch2 = np.array(buff_all2)
             if self.verbosity > 0:
@@ -457,11 +461,12 @@ class WhamRedPitaya_SCPI():
             plt.xlabel("Time (ms)")
             plt.ylabel("Volts")
             
-            strFile = "/home/whamdata/WHAM_Data/data_saving/" + self.ip.split(".")[0] + ".png"
+            strFile = "./data_saving/" + self.device_node + ".png"
             print("writing plots " + strFile)
             if os.path.isfile(strFile):
                 os.remove(strFile)
             plt.savefig(strFile)
+            plt.show()
             plt.close()
         elif self.channel == 1:
             plt.plot(self.data_ch1)
@@ -485,8 +490,26 @@ class WhamRedPitaya_SCPI():
             self._write_plots()
 
         print('Elapsed time for writing = {}'.format(time.time() - timeStart))
-        print('Done')
     
+    def output(self, wave_form = 'triangle', freq=2000, ampl=1):
+
+        # Generate a continuous waveform for testing on both outputs
+        self.dev.tx_txt("GEN:RST")
+        self.dev.tx_txt('SOUR1:FUNC ' + str(wave_form).upper())
+        self.dev.tx_txt('SOUR1:FREQ:FIX ' + str(freq))
+        self.dev.tx_txt('SOUR1:VOLT ' + str(ampl))
+
+        self.dev.tx_txt('SOUR2:FUNC ' + str(wave_form).upper())
+        self.dev.tx_txt('SOUR2:FREQ:FIX ' + str(freq))
+        self.dev.tx_txt('SOUR2:VOLT ' + str(ampl))
+
+        # Enable output
+        self.dev.tx_txt('OUTPUT1:STATE ON')
+        self.dev.tx_txt('SOUR1:TRig:INT')
+        self.dev.tx_txt('OUTPUT2:STATE ON')
+        self.dev.tx_txt('SOUR2:TRig:INT')
+
+        
     def close(self):
         if not self.dev == None:
             self.dev.close()
@@ -497,3 +520,4 @@ class WhamRedPitayaConnectionError(Exception):
 
     def __init__(self):
         pass
+# %%
