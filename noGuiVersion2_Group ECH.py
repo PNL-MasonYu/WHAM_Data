@@ -10,12 +10,12 @@ MDSPLUS_SERVER = "andrew.psl.wisc.edu"
 MDSPLUS_TREE = "wham"
 
 
-ECH_IP_LIST = [("rp-f0bda7.local", 5000),
-               ("rp-f0bd7d.local", 5000),
-               ("rp-f0939a.local", 5000)
-               ]
+ECH_IP_LIST = [("192.168.130.224", 5000),
+               ("192.168.130.223", 5000),
+               ("192.168.130.225", 5000),
+               ("192.168.130.226", 5000)]
 
-ECH_device_nodes = ["ECH_RP_01", "ECH_RP_02", "ECH_RP_03"]
+ECH_device_nodes = ["ECH_RP_01", "ECH_RP_02", "ECH_RP_03", "ECH_RP_04"]
 
 if __name__ == '__main__':
     rpg_ech = WhamRedPitayaGroup(num_devices=len(ECH_IP_LIST), ip_list=ECH_IP_LIST, device_tree="ECH.ECH_RAW", device_nodes=ECH_device_nodes,
@@ -31,8 +31,8 @@ if __name__ == '__main__':
     while 1:
         for device in rpg_ech.connected_devices_list:
             device.verbosity=1
-            device.n_pts = 5e5
-            device.downsample_value = 8
+            device.n_pts = 2e6
+            device.downsample_value = 2
             device.bMDS = 1
             device.bPlot = 1
             device.channel = 3
