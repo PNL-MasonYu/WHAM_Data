@@ -224,15 +224,6 @@ class WhamRedPitaya_SCPI():
         self.dev = scpi.scpi(self.ip)
         self.dev.tx_txt('ACQ:RST')
 
-    def set_buffer_size(self):
-        # close any existing SCPI connection first
-        self.close()
-        # establish ssh tunnel
-        client = paramiko.SSHClient()
-        client.connect(self.ip, username="root", password="root")
-        # TODO: edit the file and rebuild tree here, has to go through a reboot!!!
-        client.close()
-
     def configure(self):
         self.dev.tx_txt('ACQ:RST')
         self.dev.check_error()
@@ -466,16 +457,16 @@ class WhamRedPitaya_SCPI():
             if os.path.isfile(strFile):
                 os.remove(strFile)
             plt.savefig(strFile)
-            plt.show()
+            #plt.show()
             plt.close()
         elif self.channel == 1:
             plt.plot(self.data_ch1)
     #       plt.plot(np.diff(self.data_in))
-            plt.show()
+            #plt.show()
         elif self.channel == 2:
             plt.plot(self.data_ch2)
     #       plt.plot(np.diff(self.data_in))
-            plt.show()
+            #plt.show()
 
     def store(self):
         timeStart = time.time()
