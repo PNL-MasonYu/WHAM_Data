@@ -449,7 +449,7 @@ class WhamRedPitaya_SCPI():
             time_scale = np.linspace(0, 1/(self.fs/self.downsample_value)*len(self.data_ch1), len(self.data_ch2))
             plt.plot(time_scale, self.data_ch1)
             plt.plot(time_scale, self.data_ch2)
-            plt.xlabel("Time (ms)")
+            plt.xlabel("Time (s)")
             plt.ylabel("Volts")
             
             strFile = "./data_saving/" + self.device_node + ".png"
