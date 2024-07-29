@@ -1,7 +1,5 @@
 # %%
-#from MDSplus import * #Connection
-
-from WhamRedPitaya import WhamRedPitayaGroup, WhamRedPitaya
+from WhamRedPitaya import WhamRedPitayaGroup
 
 import numpy as np
 
@@ -14,18 +12,11 @@ MDSPLUS_SERVER = "andrew.psl.wisc.edu"
 MDSPLUS_TREE = "wham"
 
 IP_LIST = [
-    ("rp-f0bd64.local", 5000),
-    ("rp-f0bd4d.local", 5000),
-    ("rp-f0bd60.local", 5000),
-    ("rp-f0bd40.local", 5000)
-]
+    ("192.168.130.228", 5000)]
 
 
-NUM_DEVICES = 4
-device_nodes = ["NBI_RP_01",
-                "NBI_RP_02",
-                "NBI_RP_03",
-                "NBI_RP_04"]
+NUM_DEVICES = 1
+device_nodes = ["NBI_RP_01"]
 
 if __name__ == '__main__':
     rpg = WhamRedPitayaGroup(num_devices=NUM_DEVICES, ip_list=IP_LIST, device_tree=DEVICE_TREE, device_nodes=device_nodes,

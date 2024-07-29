@@ -1,7 +1,10 @@
  # %%
 from WhamRedPitaya import WhamRedPitayaGroup
-
-import numpy as np
+import logging
+import time
+start_time = time.localtime()
+err_file = "/mnt/n/whamdata/WHAMdata4_logs/ECH_log_" + time.strftime("%Y_%m_%d_%H-%M", start_time) + ".csv"
+logging.basicConfig(filename=err_file, level=logging.INFO)
 
 # MDSplus node to write data to
 DEVICE_TREE = "ECH.ECH_RAW"

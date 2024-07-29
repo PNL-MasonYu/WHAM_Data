@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from MDSplus import connection
 import redpitaya_scpi as scpi
 
-import paramiko
+import logging
 import time
 #import h5py
 from datetime import datetime
@@ -20,7 +20,7 @@ from multiprocessing import Process, Manager, Pool
 
 
 
-MDSPLUS_SERVER = "andrew"
+MDSPLUS_SERVER = "andrew.psl.wisc.edu"
 MDSPLUS_TREE = "wham"
 
 DEVICE_TREE = "NBI.NBI_RAW"
@@ -113,6 +113,7 @@ class WhamRedPitayaGroup():
 
                 # If not successful, skip and write None to list of connected devices
                 print("Skipping device at " + device.ip + ".")
+                logging.info("Skipping device at " + device.ip + ".")
                 self.connected_devices_list.append(None)
 
 
@@ -139,6 +140,7 @@ class WhamRedPitayaGroup():
                 continue
             else:
                 print("Creating thread for device at " + device.ip)
+                logging.info("Creating thread for device at " + device.ip)
                 t = Thread(target=device.arm)
                 self.threads.append(t)
                 t.start()
@@ -167,8 +169,7 @@ class WhamRedPitayaGroup():
             pool.join()
 
         print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
-        print('Done')
-
+        logging.info('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
 # Wrapper function for device.store()
 def store_data(device):
     return device.store()
@@ -177,12 +178,14 @@ def store_data(device):
 
 
 class WhamRedPitaya_SCPI():
-    def __init__(self, ip, port=5000, device_node=DEVICE_TREE+".NBI_RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE, Trig=None, shot_num=None) -> None:
+    def __init__(self, ip, port=5000, device_node=DEVICE_TREE+".NBI_RP_01", mdsplus_server = MDSPLUS_SERVER, mdsplus_tree = MDSPLUS_TREE, Trig=None, shot_num=0) -> None:
 
         self.device_node = device_node # The name of the node to write data to. Should be something like "ECH:ECH_RAW:RP_1"
 
         self.ip = ip
         self.port = port #5000 by default
+
+        self.last_shot = None
 
         self.mdsplus_server = mdsplus_server # server running mdsplus
         self.mdsplus_tree = mdsplus_tree # name of top mdsplus tree (should always be "wham")
@@ -204,6 +207,7 @@ class WhamRedPitaya_SCPI():
             self.trig = "NOW"
         elif Trig not in TRIG_SOURCES:
             print(self.trig + " not in list of possible trigger sources, default to NOW")
+            logging.error(self.trig + " not in list of possible trigger sources, default to NOW")
             self.trig = "NOW"
         else:
             self.trig = Trig
@@ -216,11 +220,12 @@ class WhamRedPitaya_SCPI():
         self.verbosity = 1
 
         self.shot_num = shot_num
-
+        self.connect()
 
     def connect(self):
         if self.verbosity > 0:
             print("Connecting to device at " + self.ip + " on port " + str(self.port) + ".")
+            logging.info("Connecting to device at " + self.ip + " on port " + str(self.port) + ".")
         self.dev = scpi.scpi(self.ip)
         self.dev.tx_txt('ACQ:RST')
 
@@ -237,15 +242,24 @@ class WhamRedPitaya_SCPI():
         self.dev.tx_txt('ACQ:SOUR1:GAIN HV')
         self.dev.tx_txt('ACQ:SOUR2:GAIN HV')
         if self.verbosity > 0:
-            print('ACQ:AXI:DATA:UNITS?: ',self.dev.txrx_txt('ACQ:AXI:DATA:UNITS?'))
-            print('ACQ:SOUR1:GAIN?: ',self.dev.txrx_txt('ACQ:SOUR1:GAIN?'))
-            print('ACQ:SOUR2:GAIN?: ',self.dev.txrx_txt('ACQ:SOUR2:GAIN?'))
+            rec_str = 'ACQ:AXI:DATA:UNITS?: ',self.dev.txrx_txt('ACQ:AXI:DATA:UNITS?')
+            print(rec_str)
+            logging.info(rec_str)
+            rec_str = 'ACQ:SOUR1:GAIN?: ',self.dev.txrx_txt('ACQ:SOUR1:GAIN?')
+            print(rec_str)
+            logging.info(rec_str)
+            rec_str = 'ACQ:SOUR2:GAIN?: ',self.dev.txrx_txt('ACQ:SOUR2:GAIN?')
+            print(rec_str)
+            logging.info(rec_str)
+
         self.dev.check_error()
         
         # Set the decimation valueConnection
         self.dev.tx_txt('ACQ:AXI:DEC ' + str(int(self.downsample_value)))
         if self.verbosity > 0:
-            print('ACQ:AXI:DEC?: ',self.dev.txrx_txt('ACQ:AXI:DEC?'))
+            rec_str = 'ACQ:AXI:DEC?: ',self.dev.txrx_txt('ACQ:AXI:DEC?')
+            print(rec_str)
+            logging.info(rec_str)
         self.dev.check_error()
 
         # Get AXI start address and size of buffer
@@ -253,22 +267,28 @@ class WhamRedPitaya_SCPI():
         size = int(self.dev.txrx_txt('ACQ:AXI:SIZE?'))
         if self.verbosity > 0:
             print(self.ip + ' :ACQ:AXI:START?: ' + str(start))
+            logging.info(self.ip + ' :ACQ:AXI:START?: ' + str(start))
             print(self.ip + ' :ACQ:AXI:SIZE?: ' + str(size))
+            logging.info(self.ip + ' :ACQ:AXI:SIZE?: ' + str(size))
         #if self.n_pts > (size // 2): #2 bytes per data point
         #    print("too many data points, truncating from {:.3e} to {:.3e} points".format(self.n_pts, (size // 2)))
         #    self.n_pts = (size // 2)
         self.dev.check_error()
 
         if self.verbosity > 0:
-            print("Start address ",start," size of aviable memory ",size)
+            print("Start address ",start," size of avialable memory ",size)
+            logging.info("Start address "+ str(start) +" size of avialable memory "+ str(size))
             print("Number of samples to capture per channel " + str(self.n_pts))
+            logging.info("Number of samples to capture per channel " + str(self.n_pts))
 
         # Specify the buffer sizes in bytes for the first and second channels
         add_str_ch1 = 'ACQ:AXI:SOUR1:SET:Buffer ' + str(start) + ',' + str(size//2)
         add_str_ch2 = 'ACQ:AXI:SOUR2:SET:Buffer ' + str(start + size//2) + ',' + str(size//2)
         if self.verbosity > 0:
             print("set channel 1 address: " + add_str_ch1)
+            logging.info("set channel 1 address: " + add_str_ch1)
             print("set channel 2 address: " + add_str_ch2)
+            logging.info("set channel 2 address: " + add_str_ch2)
 
         self.dev.tx_txt(add_str_ch1)
         self.dev.tx_txt(add_str_ch2)
@@ -279,14 +299,20 @@ class WhamRedPitaya_SCPI():
         self.dev.tx_txt('ACQ:AXI:SOUR2:Trig:Dly '+ str(int(self.n_pts)))
         self.dev.check_error()
         if self.verbosity > 0:
-            print("channel 1 number of samples after trig: " + self.dev.txrx_txt('ACQ:AXI:SOUR1:Trig:Dly?'))
-            print("channel 2 number of samples after trig: " + self.dev.txrx_txt('ACQ:AXI:SOUR2:Trig:Dly?'))
+            rec_str = "channel 1 number of samples after trig: " + self.dev.txrx_txt('ACQ:AXI:SOUR1:Trig:Dly?')
+            print(rec_str)
+            logging.info(rec_str)
+            rec_str = "channel 2 number of samples after trig: " + self.dev.txrx_txt('ACQ:AXI:SOUR2:Trig:Dly?')
+            print(rec_str)
+            logging.info(rec_str)
 
         self.dev.tx_txt('ACQ:AXI:SOUR1:ENable ON')
         self.dev.tx_txt('ACQ:AXI:SOUR2:ENable ON')
         self.dev.check_error()
     
     def arm(self):
+        # set the digital trigger pin to input only
+        self.dev.tx_txt('DIG:PIN:DIR IN,DIO0_P')
         # set start
         self.dev.tx_txt('ACQ:START')
 
@@ -297,7 +323,8 @@ class WhamRedPitaya_SCPI():
     
         duration = self.n_pts/(self.fs/self.downsample_value)
         print("Acquiring for " + str(duration*1000) + " ms")
-        time.sleep(duration) 
+        logging.info("Acquiring for " + str(duration*1000) + " ms")
+        #time.sleep(duration) 
     
         while 1:
             self.dev.tx_txt('ACQ:AXI:SOUR1:TRIG:FILL?')
@@ -309,6 +336,7 @@ class WhamRedPitaya_SCPI():
                 break
 
         print("All data captured on " + self.ip)
+        logging.info("All data captured on " + self.ip)
         self.dev.tx_txt('ACQ:STOP')
 
         self._read()
@@ -381,7 +409,9 @@ class WhamRedPitaya_SCPI():
             self.data_ch2 = np.array(buff_all2)
             if self.verbosity > 0:
                 print("ch1 data size " + str(len(self.data_ch1)))
+                logging.info("ch1 data size " + str(len(self.data_ch1)))
                 print("ch2 data size " + str(len(self.data_ch2)))
+                logging.info("ch2 data size " + str(len(self.data_ch2)))
             """
             # ASCII data receiving
             print(self.ip + " receiving ASCII data from Ch1 from :" + str(trig_ch1))
@@ -399,33 +429,50 @@ class WhamRedPitaya_SCPI():
             self.data_ch2 = np.array(buff_string2, dtype=np.float64)   #list(map(np.float64, buff_string2))
             """
             print(self.ip + "done receiving")
+            logging.info(self.ip + "done receiving")
             #print(self.data_ch1[:100])
             
             self.dev.tx_txt('ACQ:AXI:SOUR1:ENable OFF')
             self.dev.tx_txt('ACQ:AXI:SOUR2:ENable OFF')
 
         print('Elapsed time for receiving= {}'.format(time.time() - timeStart))
+        logging.info('Elapsed time for receiving= {}'.format(time.time() - timeStart))
 
         
 
     def write_mdsplus(self, conn):
+        
 
-        if self.shot_num == None:
-            # Get current shot number using TDI expression
-            self.shot_num = conn.get('$shot') 
-
+        # Check that we are not writing to the same shot
+        if self.shot_num == self.last_shot:
+            print("Overlapping shot number " + str(self.shot_num) + "!")
+            logging.error("Overlapping shot number " + str(self.shot_num) + "!")
+    
+        if self.last_shot == None:
+            self.last_shot = self.shot_num
+    
         msg1 = "Writing data to shot number: " + self.shot_num
         msg2 = "Writing data to node: " + self.device_node
 
         print(msg1) 
         print(msg2)
-        
-        # Write (put) the data to the device in MDSplus
-        # TODO: make channels 1 and 2 individually work as well
-        conn.put(self.device_node+":CH_01", "$", self.data_ch1)
-        conn.put(self.device_node+":CH_02", "$", self.data_ch2)
-        conn.put(self.device_node+":FREQ", "$", self.fs/self.downsample_value)
-        conn.put(self.device_node+":NAME", "$", self.ip + " " + str(datetime.now()))
+        logging.info(msg1)
+        logging.info(msg2)
+        try:
+            # Write (put) the data to the device in MDSplus
+            conn.put(self.device_node+":CH_01", "$", self.data_ch1)
+            conn.put(self.device_node+":CH_02", "$", self.data_ch2)
+            conn.put(self.device_node+":FREQ", "$", self.fs/self.downsample_value)
+            conn.put(self.device_node+":NAME", "$", self.ip + " " + str(datetime.now()))
+            self.last_shot = self.shot_num
+        except Exception as E:
+            print("MDSPlus Error on " + self.ip)
+            print(E)
+            print("Shot number: {:}".format(self.shot_num))
+            logging.error("MDSPlus Error on " + self.ip)
+            logging.error(E)
+            logging.error("Shot number: {:}".format(self.shot_num))
+
 
     def _write_mdsplus(self):
         
@@ -437,34 +484,43 @@ class WhamRedPitaya_SCPI():
         # Open the tree
         conn.openTree(self.mdsplus_tree, self.shot_num)
 
+        # Get the current shot number
+        self.shot_num = conn.get('$shot')
+
+        time.sleep(1)
         # Write the data
         self.write_mdsplus(conn)
 
         # Close the tree and latest shot
-        conn.closeTree(self.mdsplus_tree, 0)
+        conn.closeTree(self.mdsplus_tree, self.shot_num)
 
     def _write_plots(self):
         if self.channel == 3:
             
             time_scale = np.linspace(0, 1/(self.fs/self.downsample_value)*len(self.data_ch1), len(self.data_ch2))
-            plt.plot(time_scale, self.data_ch1)
-            plt.plot(time_scale, self.data_ch2)
+            plt.plot(time_scale, self.data_ch1, label="ch1")
+            plt.plot(time_scale, self.data_ch2, label="ch2")
+            plt.legend()
             plt.xlabel("Time (s)")
             plt.ylabel("Volts")
             
             strFile = "./data_saving/" + self.device_node + ".png"
-            print("writing plots " + strFile)
+            if self.verbosity > 0:
+                print("writing plots " + strFile)
+                logging.info("writing plots " + strFile)
             if os.path.isfile(strFile):
                 os.remove(strFile)
             plt.savefig(strFile)
             #plt.show()
             plt.close()
         elif self.channel == 1:
-            plt.plot(self.data_ch1)
+            plt.plot(self.data_ch1, label="ch1")
+            plt.legend()
     #       plt.plot(np.diff(self.data_in))
             #plt.show()
         elif self.channel == 2:
-            plt.plot(self.data_ch2)
+            plt.plot(self.data_ch2, label="ch2")
+            plt.legend()
     #       plt.plot(np.diff(self.data_in))
             #plt.show()
 
@@ -481,6 +537,7 @@ class WhamRedPitaya_SCPI():
             self._write_plots()
 
         print('Elapsed time for writing = {}'.format(time.time() - timeStart))
+        logging.info('Elapsed time for writing = {}'.format(time.time() - timeStart))
     
     def output(self, wave_form = 'triangle', freq=2000, ampl=1):
 

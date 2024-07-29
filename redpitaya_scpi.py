@@ -46,8 +46,9 @@ class scpi (object):
         while 1:
             chunk = self._socket.recv(chunksize).decode('utf-8') # Receive chunk size of 2^n preferably
             msg += chunk
-            if (len(msg) > 2 and msg[-2:] == self.delimiter):
-                return msg[:-2]
+            delimiter_len = len(self.delimiter)
+            if (len(msg) > delimiter_len and msg[-delimiter_len:] == self.delimiter):
+                return msg[:-delimiter_len]
 
 
     def rx_arb(self):

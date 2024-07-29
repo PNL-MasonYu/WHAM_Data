@@ -12,7 +12,13 @@ class rigol_scpi:
         self.ip = IP
         self.shot_num = None
         self.last_shot = None
-        self.device_node = "RAW.MASON_SCOPE"
+        if self.ip == "192.168.130.227":
+            self.device_node = "RAW.MASON_SCOPE"
+        if self.ip == "192.168.130.231":
+            self.device_node = "RAW.TQ_SCOPE"
+        self.mdsplus_server = "andrew.psl.wisc.edu"
+        if self.ip == "192.168.130.233":
+            self.device_node = "RAW.MASON_DS1000"
         self.mdsplus_server = "andrew.psl.wisc.edu"
         self.mdsplus_tree = "wham"
         self.data_ch1 = None
@@ -20,25 +26,56 @@ class rigol_scpi:
         self.data_ch3 = None
         self.data_ch4 = None
         self.offset = 0.0  # time base offset in seconds
-        self.timescale = 10  # time base scale in seconds per division (10 div total)
+        self.timescale = 10.0  # time base scale in seconds per division (10 div total)
+        self.sample_rate = 1.0
         
-        
-    def get_waveform(self, ch=3):
+    def get_waveform(self, ch=1):
+        self.dev.tx_txt(":STOP")
         self.dev.tx_txt(":WAV:SOUR CHAN" + str(ch))
         self.dev.tx_txt(":WAV:MODE MAXimum")
         #self.dev.tx_txt(":WAV:FORM ASCii")
+        self.dev.tx_txt(":WAV:STAR 1")
         self.dev.tx_txt(":WAV:FORM WORD") # 2 bytes per point
-        self.dev.tx_txt(":WAVeform:DATA?")
+        self.dev.tx_txt(":WAV:DATA?")
         buff_byte1 = self.dev.rx_arb()
-        data = []
+        rawdata = []
         for i in range(0, len(buff_byte1), 2):
             bit_data = int.from_bytes(bytearray(buff_byte1[i:i+2]), 'little')
-            data.append(bit_data)
-        #buff = self.dev.rx_txt()
-        #data = np.array(buff, dtype=np.float64)
-        #plt.plot(data)
+            rawdata.append(bit_data)
+        #plt.plot(rawdata)
         #plt.show()
-        return np.array(data)
+        volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
+        data = np.array(rawdata) * volts_per_division * 8.0 / 32767.0
+        
+        return data
+    
+    def get_waveform_chunks(self, ch=1, chunks=100):
+        self.dev.tx_txt(":STOP")
+        self.dev.tx_txt(":WAV:SOUR CHAN" + str(ch))
+        self.dev.tx_txt(":WAV:MODE MAXimum")
+        maximum_points = self.dev.txrx_txt("ACQuire:MDEPth?")
+        chunk_bounds = np.linspace(1, int(maximum_points), chunks)
+        rawdata = []
+        for n in range(chunks-1):
+            start = str(int(chunk_bounds[n]))
+            stop = str(int(chunk_bounds[n + 1])-1)
+            self.dev.tx_txt(":WAV:STAR " + start)
+            self.dev.tx_txt(":WAV:STOP " + stop)
+            #print(start + " - " + stop)
+            self.dev.tx_txt(":WAV:FORM BYTE")
+            self.dev.tx_txt(":WAV:DATA?")
+            buff = self.dev.rx_arb()
+            for i in range(0, len(buff)):
+                bit_data = int.from_bytes(bytearray(buff[i:i+1]), 'little')
+                rawdata.append(bit_data)
+
+            # Need this extra command in here to ensure the next series of bytes starts with the proper header
+            volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
+        #plt.plot(rawdata)
+        #plt.show()
+        data = np.array(rawdata) * volts_per_division * 8.0 / 32767.0
+        
+        return data
     
     def set_up_channel(self, ch=1):
         # Sets channel to no bandwidth limit, DC coupling, zero offset, 1 meg impedance
@@ -49,15 +86,36 @@ class rigol_scpi:
         
         
     def get_all_ch_waveform(self):
-        self.data_ch1 = self.get_waveform(ch=1)*self.get_vertical_scale(1)*8
-        self.data_ch2 = self.get_waveform(ch=2)*self.get_vertical_scale(2)*8
-        self.data_ch3 = self.get_waveform(ch=3)*self.get_vertical_scale(3)*8
-        self.data_ch4 = self.get_waveform(ch=4)*self.get_vertical_scale(4)*8
+        self.data_ch1 = self.get_waveform(ch=1)
+        self.data_ch2 = self.get_waveform(ch=2)
+        self.data_ch3 = self.get_waveform(ch=3)
+        self.data_ch4 = self.get_waveform(ch=4)
+
+    def get_all_ch_waveform_chunks(self):
+        self.data_ch1 = self.get_waveform_chunks(ch=1)
+        self.data_ch2 = self.get_waveform_chunks(ch=2)
+        self.data_ch3 = self.get_waveform_chunks(ch=3)
+        self.data_ch4 = self.get_waveform_chunks(ch=4)
 
     def get_time_scale(self):
+        # This is not sampling rate! It's the time base on the screen
         scale = self.dev.txrx_txt(":TIMebase:MAIN:SCALe?")
         self.timescale = float(scale) 
         return float(scale)
+    
+    def get_sampling_rate(self):
+        sample_rate = self.dev.txrx_txt(":ACQuire:SRATe?")
+        self.sample_rate = float(sample_rate)
+        return self.sample_rate
+    
+    def get_delay(self):
+        delay = self.dev.txrx_txt("TIMebase:MAIN:OFFSet?")
+        self.delay = float(delay)
+        return self.delay
+    
+    def get_vertical_offset(self, ch=1):
+        offset = self.dev.txrx_txt(":CHANnel" + str(ch) + ":OFFSet?")
+        return float(offset)
     
     def get_vertical_scale(self, ch=1):
         volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
@@ -70,6 +128,7 @@ class rigol_scpi:
 
         # Check that we are not writing to the same shot
         if self.shot_num == self.last_shot:
+
             print("Overlapping shot number " + str(self.shot_num) + "!")
             logging.error("Overlapping shot number " + str(self.shot_num) + "!")
     
@@ -85,13 +144,13 @@ class rigol_scpi:
         logging.info(msg2)
         # iterate through each channel and write the data
         data_chs = [self.data_ch1, self.data_ch2, self.data_ch3, self.data_ch4]
-        data_len = max([len(data_chs[i]) for i in range(3)])
         for ch in [1,2,3,4]: 
             try:
                 # Write (put) the data to the device in MDSplus
                 conn.put(self.device_node+".CH_0" + str(ch) + ":SIGNAL", "$", data_chs[ch-1])
-                #conn.put(self.device_node+":FREQ", "$",  data_len / (self.timescale * 10))
-                conn.put(self.device_node+".CH_0" + str(ch) + ":OFFSET", "$", self.offset)
+                conn.put(self.device_node+".CH_0" + str(ch) + ":FREQ", "$",  self.get_sampling_rate())
+                conn.put(self.device_node+".CH_0" + str(ch) + ":OFFSET", "$", self.get_vertical_offset(ch=ch))
+                conn.put(self.device_node+".CH_0" + str(ch) + ":DELAY", "$", self.get_delay())
                 conn.put(self.device_node+".CH_0" + str(ch) + ":SCALE",  "$", self.get_vertical_scale(ch=ch))
 
                 self.last_shot = self.shot_num
@@ -143,14 +202,29 @@ class rigol_scpi:
         plt.legend()
         plt.show()
         
+    def run(self):
+        self.dev.tx_txt(":RUN")
+
+
 if __name__ == "__main__":
-    scope = rigol_scpi()
-    #scope.get_all_ch_waveform()
-    
-    #scope.get_waveform()
-    scope.get_time_scale()
-    scope.get_vertical_scale()
-    scope.read_csv("data_saving/2407230510.csv")
-    scope.shot_num = 240723051
-    scope.plot_all_ch()
-    scope._write_mdsplus()
+    for IP in ["192.168.130.227", "192.168.130.231", "192.168.130.233"]:
+        scope = rigol_scpi(IP)
+        if IP == "192.168.130.233":
+            scope.get_all_ch_waveform_chunks()
+        elif IP == "192.168.130.227": 
+            scope.data_ch1 = []
+            scope.data_ch2 = scope.get_waveform(2)
+            scope.data_ch3 = scope.get_waveform(3)
+            scope.data_ch4 = scope.get_waveform(4)
+        else:
+            scope.get_all_ch_waveform()
+
+        scope.get_delay()
+        scope.get_vertical_offset()
+        scope.get_time_scale()
+        scope.get_vertical_scale()
+        #scope.read_csv("data_saving/2407230490.csv")
+        scope.shot_num = 0
+        #scope.plot_all_ch()
+        scope._write_mdsplus()
+        scope.run()
