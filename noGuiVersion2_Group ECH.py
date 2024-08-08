@@ -15,10 +15,10 @@ MDSPLUS_TREE = "wham"
 
 ECH_IP_LIST = [("192.168.130.224", 5000),
                ("192.168.130.223", 5000),
-               ("192.168.130.225", 5000),
+#               ("192.168.130.225", 5000),
                ("192.168.130.226", 5000)]
 
-ECH_device_nodes = ["ECH_RP_01", "ECH_RP_02", "ECH_RP_03", "ECH_RP_04"]
+ECH_device_nodes = ["ECH_RP_01", "ECH_RP_02", "ECH_RP_04"]
 
 if __name__ == '__main__':
     rpg_ech = WhamRedPitayaGroup(num_devices=len(ECH_IP_LIST), ip_list=ECH_IP_LIST, device_tree="ECH.ECH_RAW", device_nodes=ECH_device_nodes,
@@ -31,18 +31,18 @@ if __name__ == '__main__':
         if not all(device is None for device in rpg_ech.connected_devices_list):
             break
 
-    while 1:
-        for device in rpg_ech.connected_devices_list:
-            device.verbosity=1
-            device.n_pts = 2e6
-            device.downsample_value = 2
-            device.bMDS = 1
-            device.bPlot = 1
-            device.channel = 3
-            #device.trig_level = 0.3
-            #device.trig = "CH2_PE"
-            
 
-        rpg_ech.configure_devices()
-        rpg_ech.arm_devices() # This will finish when data is received from all devices
-        rpg_ech.store_data()
+    for device in rpg_ech.connected_devices_list:
+        device.verbosity=1
+        device.n_pts = 2e6
+        device.downsample_value = 2
+        device.bMDS = 1
+        device.bPlot = 1
+        device.channel = 3
+        #device.trig_level = 0.3
+        #device.trig = "CH2_PE"
+        
+
+    rpg_ech.configure_devices()
+    rpg_ech.arm_devices() # This will finish when data is received from all devices
+    rpg_ech.store_data()

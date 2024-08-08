@@ -504,7 +504,7 @@ class WhamRedPitaya_SCPI():
             plt.xlabel("Time (s)")
             plt.ylabel("Volts")
             
-            strFile = "./data_saving/" + self.device_node + ".png"
+            strFile = "/home/whamdata/WHAM_Data/data_saving/" + self.device_node + ".png"
             if self.verbosity > 0:
                 print("writing plots " + strFile)
                 logging.info("writing plots " + strFile)

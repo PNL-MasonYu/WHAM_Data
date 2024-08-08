@@ -27,6 +27,7 @@ class rigol_scpi:
         self.data_ch4 = None
         self.offset = 0.0  # time base offset in seconds
         self.timescale = 10.0  # time base scale in seconds per division (10 div total)
+        self.delay = 0.0  # This is number of ms from trigger edge to start of pulse
         self.sample_rate = 1.0
         
     def get_waveform(self, ch=1):
@@ -45,8 +46,13 @@ class rigol_scpi:
         #plt.plot(rawdata)
         #plt.show()
         volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
-        data = np.array(rawdata) * volts_per_division * 8.0 / 32767.0
-        
+        vertical_position = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":POSition?"))
+        vertical_offset = self.get_vertical_offset(ch=ch)
+        data = np.array(rawdata) / 65535.0 * volts_per_division * 8.0
+        data = data - volts_per_division * 4.0 - vertical_offset
+        print("volts per division of ch {:} : {:}".format(ch, volts_per_division))
+        print("vertical position of ch {:} : {:}".format(ch, vertical_position))
+        print("vertical offset of ch {:} : {:}".format(ch, vertical_offset))
         return data
     
     def get_waveform_chunks(self, ch=1, chunks=100):
@@ -61,7 +67,7 @@ class rigol_scpi:
             stop = str(int(chunk_bounds[n + 1])-1)
             self.dev.tx_txt(":WAV:STAR " + start)
             self.dev.tx_txt(":WAV:STOP " + stop)
-            #print(start + " - " + stop)
+            print(start + " - " + stop)
             self.dev.tx_txt(":WAV:FORM BYTE")
             self.dev.tx_txt(":WAV:DATA?")
             buff = self.dev.rx_arb()
@@ -73,7 +79,13 @@ class rigol_scpi:
             volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
         #plt.plot(rawdata)
         #plt.show()
-        data = np.array(rawdata) * volts_per_division * 8.0 / 32767.0
+        volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
+        #vertical_position = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":POSition?"))
+        #vertical_offset = self.get_vertical_offset(ch=ch)
+        data = np.array(rawdata) / 65535.0 * volts_per_division * 8.0 - volts_per_division * 4.0
+        print("volts per division of ch {:} : {:}".format(ch, volts_per_division))
+        #print("vertical position of ch {:} : {:}".format(ch, vertical_position))
+        #print("vertical offset of ch {:} : {:}".format(ch, vertical_offset))
         
         return data
     
@@ -109,8 +121,14 @@ class rigol_scpi:
         return self.sample_rate
     
     def get_delay(self):
-        delay = self.dev.txrx_txt("TIMebase:MAIN:OFFSet?")
-        self.delay = float(delay)
+        # This is the delay from start of data to trigger position in seconds
+        #trig_pos = self.dev.txrx_txt(":TRIGger:POSition?")
+        #print("Trigger position: " + trig_pos)
+        #timebase_offset = self.dev.txrx_txt(":TIMebase:MAIN:OFFSet?")
+        #print("Timebase offset: " + timebase_offset)
+        x_origin = self.dev.txrx_txt(":WAVeform:XORigin?")
+        #print("X origin: " + x_origin)
+        self.delay = float(x_origin)
         return self.delay
     
     def get_vertical_offset(self, ch=1):
@@ -194,32 +212,35 @@ class rigol_scpi:
 
         
     def plot_all_ch(self):
-        time_base = np.linspace(0, self.timescale*10, len(self.data_ch1))
+        time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1)) - self.get_delay()
         plt.plot(time_base, self.data_ch1, label="ch1")
         plt.plot(time_base, self.data_ch2, label="ch2")
         plt.plot(time_base, self.data_ch3, label="ch3")
         plt.plot(time_base, self.data_ch4, label="ch4")
+        #plt.vlines([0], -10, 10)
         plt.legend()
+        plt.title(self.ip)
         plt.show()
         
     def run(self):
         self.dev.tx_txt(":RUN")
+        
+    def force_trig(self):
+        self.dev.tx_txt(":TFORce")
+
+#    def write_waveform(self, path):
 
 
 if __name__ == "__main__":
     for IP in ["192.168.130.227", "192.168.130.231", "192.168.130.233"]:
         scope = rigol_scpi(IP)
         if IP == "192.168.130.233":
+            #scope.force_trig()
             scope.get_all_ch_waveform_chunks()
-        elif IP == "192.168.130.227": 
-            scope.data_ch1 = []
-            scope.data_ch2 = scope.get_waveform(2)
-            scope.data_ch3 = scope.get_waveform(3)
-            scope.data_ch4 = scope.get_waveform(4)
         else:
             scope.get_all_ch_waveform()
 
-        scope.get_delay()
+        print(scope.get_delay())
         scope.get_vertical_offset()
         scope.get_time_scale()
         scope.get_vertical_scale()

@@ -32,7 +32,7 @@ class WhamGasPuff():
         #self.dev.tx_txt('SOUR1:BURS:INITValue 0')
         self.dev.tx_txt('SOUR1:TRig:SOUR EXT_NE')
         #self.dev.tx_txt('SOUR:TRig:EXT:DEBouncerUs 10')
-        #self.dev.tx_txt('SOUR1:TRig:SOUR NOW')
+        #self.dev.tx_txt('SOUR1:TRig:SOUR NOW') 
         #self.dev.tx_txt('SOUR1:TRIG:INT')
 
         self.dev.tx_txt('OUTPUT1:STATE ON')
@@ -70,13 +70,13 @@ class WhamGasPuff():
     
     def arm_arb_waveform(self, path='/mnt/n/whamdata/Gas Puff Waveform/gas_puff_waveform.csv'):
         
-        self.dev.tx_txt('GEN:RST')
+        #self.dev.tx_txt('GEN:RST')
         total_ms = np.loadtxt(path, delimiter=',', usecols=0)[0]
         data_array = np.loadtxt(path, delimiter=',', skiprows=1)
         frequency = 1 / (total_ms / 1000)
         self.dev.sour_set(1, "ARBITRARY", freq=frequency, data=data_array, burst=True, ncyc=1, nor=1, trig="EXT_NE")
         self.dev.tx_txt('OUTPUT1:STATE ON')
-        #print("gas system armed with arbitrary waveform from LabView")
+        logging.debug("gas system armed with arbitrary waveform from LabView")
         #plt.plot(data_array)
         #plt.show()
         return
@@ -108,15 +108,15 @@ if __name__ == "__main__":
     data_acq.verbosity = 1
     #data_acq.dev = gas_puff.dev
 
-    while True:
-        #gas_puff.arm_gas_puff(wave_form='square', ampl=1, pulse_len_ms=6)
-        #gas_puff.arm_dual_pulse_waveform(prefill_ms=3, delay_ms=195, prefill_lvl = 1.0, start_lvl=1.0, end_lvl=1.0, puff_ms=9)
-        #gas_puff.arm_arb_waveform()
-        gas_puff._run_arb_waveform()
-        data_acq.configure()
-        data_acq.arm()
-        data_acq.store()
-        print("Output data acquired")
-        gas_puff.reset_gas_puff()
+    #gas_puff.arm_gas_puff(wave_form='square', ampl=1, pulse_len_ms=6)
+    #gas_puff.arm_dual_pulse_waveform(prefill_ms=3, delay_ms=195, prefill_lvl = 1.0, start_lvl=1.0, end_lvl=1.0, puff_ms=9)
+    #gas_puff.arm_arb_waveform()
+    gas_puff._run_arb_waveform()
+    data_acq.configure()
+    data_acq.arm()
+    data_acq.store()
+    print("Output data acquired")
+    logging.debug("Reset gas puff")
+    gas_puff.reset_gas_puff()
 
-        time.sleep(10)
+    time.sleep(10)
