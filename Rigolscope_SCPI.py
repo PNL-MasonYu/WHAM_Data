@@ -17,7 +17,7 @@ class rigol_scpi:
         if self.ip == "192.168.130.231":
             self.device_node = "RAW.TQ_SCOPE"
         self.mdsplus_server = "andrew.psl.wisc.edu"
-        if self.ip == "192.168.130.233":
+        if self.ip == "192.168.140.225":
             self.device_node = "RAW.MASON_DS1000"
         self.mdsplus_server = "andrew.psl.wisc.edu"
         self.mdsplus_tree = "wham"
@@ -210,7 +210,11 @@ class rigol_scpi:
         self.timescale = float(timescale_str.split(" = ")[-1]) * len(self.data_ch1) / 10
         self.offset = float(t0_str.split(" =")[-1])
 
+    def store_data_local(self, path):
+        time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1)) - self.get_delay()
         
+
+
     def plot_all_ch(self):
         time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1)) - self.get_delay()
         plt.plot(time_base, self.data_ch1, label="ch1")
@@ -228,24 +232,45 @@ class rigol_scpi:
     def force_trig(self):
         self.dev.tx_txt(":TFORce")
 
-#    def write_waveform(self, path):
+    def write_waveform(self, path):
+        with open(path, "ab") as f:
+            #np.savetxt(path, self.data_ch1)
+            np.savetxt(f, self.data_ch2)
+            np.savetxt(f, self.data_ch3)
+            #np.savetxt(path, self.data_ch4)
 
 
 if __name__ == "__main__":
-    for IP in ["192.168.130.227", "192.168.130.231", "192.168.130.233"]:
+    for IP in ["192.168.130.227", "192.168.140.225", "192.168.130.231"]:
+    #for n in range(50):
+        #IP = "192.168.140.225"
+        #time.time()
+        #cal_file = "/mnt/n/whamdata/x-ray_cal/Radium_and_co60_240927/" + str(int(time.time())) + "_" + str(n) + ".gz"
+        '''
+        130.227 - Mason_Scope
+        130.231 - TQ_SCOPE
+        140.225 - Mason-DS1000 
+
+        130.225 - Host ECH Red Pitaya 3
+        130.233 - LXI (Survey spectrometer?)
+        '''
+        print(f"Starting {IP}")
         scope = rigol_scpi(IP)
+        
         if IP == "192.168.130.233":
-            #scope.force_trig()
             scope.get_all_ch_waveform_chunks()
         else:
+            #scope.get_waveform(2)
             scope.get_all_ch_waveform()
 
-        print(scope.get_delay())
-        scope.get_vertical_offset()
         scope.get_time_scale()
         scope.get_vertical_scale()
+        
         #scope.read_csv("data_saving/2407230490.csv")
         scope.shot_num = 0
         #scope.plot_all_ch()
         scope._write_mdsplus()
         scope.run()
+        #scope.force_trig()
+        #scope.write_waveform(cal_file)
+        print(f"Completed {IP}\n")

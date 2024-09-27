@@ -70,7 +70,7 @@ class WhamGasPuff():
     
     def arm_arb_waveform(self, path='/mnt/n/whamdata/Gas Puff Waveform/gas_puff_waveform.csv'):
         
-        #self.dev.tx_txt('GEN:RST')
+        self.dev.tx_txt('GEN:RST')
         total_ms = np.loadtxt(path, delimiter=',', usecols=0)[0]
         data_array = np.loadtxt(path, delimiter=',', skiprows=1)
         frequency = 1 / (total_ms / 1000)
@@ -114,9 +114,11 @@ if __name__ == "__main__":
     gas_puff._run_arb_waveform()
     data_acq.configure()
     data_acq.arm()
-    data_acq.store()
+    # If the RP didn't get a data trigger, this will hang for a long time. 
+    #data_acq.store()
     print("Output data acquired")
     logging.debug("Reset gas puff")
     gas_puff.reset_gas_puff()
+    gas_puff.dev.close()
 
     time.sleep(10)
