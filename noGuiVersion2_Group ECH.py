@@ -3,7 +3,7 @@ from WhamRedPitaya import WhamRedPitayaGroup
 import logging
 import time
 start_time = time.localtime()
-err_file = "/mnt/n/whamdata/WHAMdata4_logs/ECH_log_" + time.strftime("%Y_%m_%d_%H-%M", start_time) + ".csv"
+err_file = "/mnt/n/whamdata/WHAMdata4_logs/ECH_log.csv"
 logging.basicConfig(filename=err_file, level=logging.INFO)
 
 # MDSplus node to write data to

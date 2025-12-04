@@ -4,6 +4,8 @@ from collections import UserString
 import sys, struct, os
 import redpitaya_scpi as scpi
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 #from MDSplus import * #Connection
 from MDSplus import connection
@@ -310,33 +312,47 @@ class WhamRedPitaya_SCPI():
         self.dev.tx_txt('ACQ:AXI:SOUR2:ENable ON')
         self.dev.check_error()
     
-    def arm(self):
+    def arm(self, timeout=120):
         # set the digital trigger pin to input only
         self.dev.tx_txt('DIG:PIN:DIR IN,DIO0_P')
+        acq_start_time = time.time()
         # set start
         self.dev.tx_txt('ACQ:START')
 
         self.dev.tx_txt('ACQ:TRIG ' + self.trig)
         if not (self.trig == "EXT_NE" or self.trig == "EXT_PE"):
             self.dev.tx_txt('ACQ:TRIG:LEV ' + str(self.trig_level))
+        else:
+            self.dev.tx_txt('ACQ:TRig:EXT:DEBouncer:US 200')
+            #self.dev.tx_txt('ACQ:TRig:EXT:LEV 1')
         self.dev.check_error()
     
         duration = self.n_pts/(self.fs/self.downsample_value)
         print("Acquiring for " + str(duration*1000) + " ms")
         logging.info("Acquiring for " + str(duration*1000) + " ms")
-        #time.sleep(duration) 
-    
+        start_time = time.time()
         while 1:
             self.dev.tx_txt('ACQ:AXI:SOUR1:TRIG:FILL?')
+            time.sleep(0.1)
             if self.dev.rx_txt() == '1':
                 break
+            if time.time() - start_time > timeout:
+                print("Timeout reached! Exiting")
+                logging.info("Timeout reached! Exiting")
+                return
         while 1:
             self.dev.tx_txt('ACQ:AXI:SOUR2:TRIG:FILL?')
+            time.sleep(0.1)
             if self.dev.rx_txt() == '1':
                 break
+            if time.time() - start_time > timeout:
+                print("Timeout reached! Exiting")
+                logging.info("Timeout reached! Exiting")
+                return
 
         print("All data captured on " + self.ip)
         logging.info("All data captured on " + self.ip)
+        logging.info(f"Waited for {time.time()-acq_start_time} seconds")
         self.dev.tx_txt('ACQ:STOP')
 
         self._read()

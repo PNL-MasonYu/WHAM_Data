@@ -1,4 +1,10 @@
  # %%
+"""
+Script to run the Red Pitaya digitizers on the diagnostics rack
+Arms, set up and store data from the red pitayas in that rack on external trigger
+This should be called by the master control program on Andrew and run ~30 seconds before the shot
+Running this script manually will interfere with this
+"""
 from WhamRedPitaya import WhamRedPitayaGroup
 import time
 import logging
@@ -12,17 +18,19 @@ DEVICE_TREE = "RAW.DIAG_RP_01"
 MDSPLUS_SERVER = "andrew.psl.wisc.edu"
 MDSPLUS_TREE = "wham"
 
-
+# The two commented red pitayas are currently used for logging purposes
+# f0bd65 for the NBI ion gauge data log
+# f0952f for the WISP gauge and the chiller alert
 IP_LIST = [("rp-f0bd5d.local", 5000),
             ("rp-f09303.local", 5000),
-            ("rp-f0952f.local", 5000),
+#            ("rp-f0952f.local", 5000),
             ("rp-f0be68.local", 5000),
             ("rp-f0bd72.local", 5000),
 #            ("rp-f0bd65.local", 5000),
             ("rp-f0be2d.local", 5000),
             ("rp-f0bd99.local", 5000)]
 
-device_nodes = ["RP_01", "RP_02", "RP_03", "RP_04", "RP_05", "RP_07", "RP_08"]
+device_nodes = ["RP_01", "RP_02", "RP_04", "RP_05", "RP_07", "RP_08"]
 
 if __name__ == '__main__':
     rpg = WhamRedPitayaGroup(num_devices=len(IP_LIST), ip_list=IP_LIST, device_tree=DEVICE_TREE, device_nodes=device_nodes,
@@ -56,3 +64,5 @@ if __name__ == '__main__':
     rpg.configure_devices()
     rpg.arm_devices() # This will finish when data is received from all devices
     rpg.store_data()
+
+# %%

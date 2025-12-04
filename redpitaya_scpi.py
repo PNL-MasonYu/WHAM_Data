@@ -47,8 +47,10 @@ class scpi (object):
             chunk = self._socket.recv(chunksize).decode('utf-8') # Receive chunk size of 2^n preferably
             msg += chunk
             delimiter_len = len(self.delimiter)
+            print(msg)
             if (len(msg) > delimiter_len and msg[-delimiter_len:] == self.delimiter):
                 return msg[:-delimiter_len]
+
 
 
     def rx_arb(self):
@@ -58,11 +60,15 @@ class scpi (object):
         while len(data) != 1:
             data = self._socket.recv(1)
         if data != b'#':
-            if data == b'\r':
+            if data == b'\r' or data == b'\n':
                 self._socket.recv(1)
                 self._socket.recv(1)
             else:
-                return False
+                print("Incorrect format of binary data transfer: recieved " + str(data) + " instead of #")
+                while data != b'#':
+                    data = self._socket.recv(1)
+                    print(data)
+                #return False
         data=b''
 
         while len(data) != 1:
@@ -70,6 +76,7 @@ class scpi (object):
         numOfNumBytes = int(data)
         
         if numOfNumBytes <= 0:
+            print("numOfNumBytes<0")
             return False
         data=b''
 
@@ -79,7 +86,7 @@ class scpi (object):
         #print("receiving " + str(numOfBytes) + " Bytes")
         data=b''
         while len(data) < numOfBytes:
-            r_size = min(numOfBytes - len(data),2**16)
+            r_size = min(numOfBytes - len(data),2**17)
             data += (self._socket.recv(r_size))
 
         return data
@@ -321,7 +328,7 @@ class scpi (object):
 
         self.tx_txt(f"SOUR{chan}:TRIG:SOUR {trig.upper()}")
 
-        #print(f"SOUR{chan} set successfully")
+        print(f"SOUR{chan} set successfully")
 
     def acq_set(
         self,
