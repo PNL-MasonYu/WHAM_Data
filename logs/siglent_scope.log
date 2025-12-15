@@ -1,0 +1,40 @@
+2025-12-15 15:55:04,646, 192.168.140.238 - INFO: Logger file created
+2025-12-15 15:55:04,646, 192.168.140.227 - INFO: Logger file created
+2025-12-15 15:55:04,699, 192.168.140.238 - INFO: CH 1 binary data transfer took 0.0110 s
+2025-12-15 15:55:04,745, 192.168.140.238 - INFO: CH 1 data conversion took 0.0433 s
+2025-12-15 15:55:04,764, 192.168.140.238 - INFO: CH 2 binary data transfer took 0.0122 s
+2025-12-15 15:55:04,789, 192.168.140.238 - INFO: CH 2 data conversion took 0.0225 s
+2025-12-15 15:55:04,938, 192.168.140.238 - INFO: CH 3 binary data transfer took 0.0104 s
+2025-12-15 15:55:04,965, 192.168.140.238 - INFO: CH 3 data conversion took 0.0240 s
+2025-12-15 15:55:05,068, 192.168.140.238 - INFO: CH 4 binary data transfer took 0.0373 s
+2025-12-15 15:55:05,116, 192.168.140.238 - INFO: CH 4 data conversion took 0.0441 s
+2025-12-15 15:55:05,131, 192.168.140.238 - INFO: Got all channel data from 192.168.140.238, took 0.48476433753967285 secs
+2025-12-15 15:55:06,979, 192.168.140.238 - INFO: Current shot number 251215065
+2025-12-15 15:55:07,101, 192.168.140.238 - INFO: Writing data to shot number:   251215065
+2025-12-15 15:55:07,109, 192.168.140.238 - INFO: Writing data to node: RAW.BDUMP_SCOPE
+2025-12-15 15:55:07,825, 192.168.140.238 - INFO: Finished putting ch1 data to MDSPlus from 192.168.140.238, took 0.7152628898620605 secs
+2025-12-15 15:55:08,651, 192.168.140.238 - INFO: Finished putting ch2 data to MDSPlus from 192.168.140.238, took 0.8191144466400146 secs
+2025-12-15 15:55:09,970, 192.168.140.238 - INFO: Finished putting ch3 data to MDSPlus from 192.168.140.238, took 1.2854821681976318 secs
+2025-12-15 15:55:10,744, 192.168.140.238 - INFO: Finished putting ch4 data to MDSPlus from 192.168.140.238, took 0.7682571411132812 secs
+2025-12-15 15:55:11,108, 192.168.140.238 - INFO: Scope set to run at 192.168.140.238
+2025-12-15 15:55:15,017, 192.168.140.227 - INFO: CH 1 binary data transfer took 10.0877 s
+2025-12-15 15:55:16,951, 192.168.140.227 - INFO: CH 1 data conversion took 1.7093 s
+2025-12-15 15:55:28,715, 192.168.140.227 - INFO: CH 2 binary data transfer took 10.6983 s
+2025-12-15 15:55:30,809, 192.168.140.227 - INFO: CH 2 data conversion took 1.8771 s
+2025-12-15 15:55:37,570, 192.168.140.238 - INFO: Completed 192.168.140.238, took 32.92398405075073 s
+
+2025-12-15 15:55:39,384, 192.168.140.227 - INFO: CH 3 binary data transfer took 8.0871 s
+2025-12-15 15:55:41,192, 192.168.140.227 - INFO: CH 3 data conversion took 1.6928 s
+2025-12-15 15:55:50,081, 192.168.140.227 - INFO: CH 4 binary data transfer took 8.4479 s
+2025-12-15 15:55:52,292, 192.168.140.227 - INFO: CH 4 data conversion took 2.1297 s
+2025-12-15 15:55:52,760, 192.168.140.227 - INFO: Got all channel data from 192.168.140.227, took 48.11401677131653 secs
+2025-12-15 15:55:54,785, 192.168.140.227 - INFO: Current shot number 251215065
+2025-12-15 15:55:54,907, 192.168.140.227 - INFO: Writing data to shot number:   251215065
+2025-12-15 15:55:54,915, 192.168.140.227 - INFO: Writing data to node: RAW.MASON_SCOPE
+2025-12-15 15:55:58,882, 192.168.140.227 - INFO: Finished putting ch1 data to MDSPlus from 192.168.140.227, took 3.925914764404297 secs
+2025-12-15 15:56:03,447, 192.168.140.227 - INFO: Finished putting ch2 data to MDSPlus from 192.168.140.227, took 4.564018726348877 secs
+2025-12-15 15:56:08,362, 192.168.140.227 - INFO: Finished putting ch3 data to MDSPlus from 192.168.140.227, took 4.914480924606323 secs
+2025-12-15 15:56:13,198, 192.168.140.227 - INFO: Finished putting ch4 data to MDSPlus from 192.168.140.227, took 4.836318254470825 secs
+2025-12-15 15:56:13,203, 192.168.140.227 - INFO: Scope set to run at 192.168.140.227
+2025-12-15 15:56:23,335, 192.168.140.227 - INFO: Completed 192.168.140.227, took 78.68911814689636 s
+
