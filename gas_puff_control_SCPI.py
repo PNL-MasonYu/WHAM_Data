@@ -11,6 +11,31 @@ start_time = time.localtime()
 err_file = "/mnt/n/whamdata/WHAMdata4_logs/GAS_log_" + time.strftime("%Y_%m_%d_%H-%M", start_time) + ".csv"
 logging.basicConfig(filename=err_file, level=logging.INFO)
 
+######################################################
+
+def initialize_logger(path, IP):
+
+# Create a logger for this file.
+    logger = logging.getLogger(IP)
+    logger.setLevel(logging.DEBUG)
+# Capture other warnings
+    logging.captureWarnings(True)
+# Create a file handler to write to.
+    #file_handler = logging.FileHandler("/home/dtacqAdmin/procScripts/logs/postproc_shinethru.log", "w")
+    file_handler = logging.FileHandler(path, "a")
+
+    file_handler.setLevel(logging.DEBUG)
+# Create a formatter to make the logging look nice.
+    formatter = logging.Formatter('%(asctime)s, %(name)s - %(levelname)s: %(message)s')
+    file_handler.setFormatter(formatter)
+# Add the file handler to the logger.
+    logger.addHandler(file_handler)
+
+    logger.info('Logger file created')
+    return logger
+
+######################################################
+
 class WhamGasPuff():
 
     def __init__(self, IP, device_node, n_pts=5e5+1, downsample_value=32):
@@ -20,6 +45,7 @@ class WhamGasPuff():
         self.IP = IP
         self.rp = WhamRedPitaya_SCPI(IP, device_node=device_node,
                                     mdsplus_server="andrew.psl.wisc.edu", mdsplus_tree="wham", shot_num=None, Trig="EXT_NE")
+        self.logger = initialize_logger("/home/whamdata/WHAM_Data/logs/rp_gas_puff.log", IP)
         self.rp.bMDS = 1
         self.rp.n_pts = n_pts
         self.rp.bPlot = 1
@@ -160,7 +186,7 @@ class WhamGasPuff():
         return
 
 if __name__ == "__main__":
-
+    
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         rp_01 = WhamGasPuff(IP = "192.168.130.228", device_node="raw.gas_puff_rp.rp_01") #f0:bd:40
         rp_02 = WhamGasPuff(IP = "192.168.130.229", device_node="raw.gas_puff_rp.rp_02") #f0:92:cd

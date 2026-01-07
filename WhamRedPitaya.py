@@ -147,7 +147,6 @@ class WhamRedPitayaGroup():
                 self.threads.append(t)
                 t.start()
                 
-
         # Wait for the threads to complete and join them
         for t in self.threads:
             t.join()

@@ -130,7 +130,7 @@ class siglent_scpi:
             #Get the waveform data of each slice
             self.dev.tx_txt("WAV:DATA?")
             try:
-                recv_rtn = self.dev.rx_arb()
+                recv_rtn = self.dev.rx_arb_optimized()
             except ValueError:
                 logger.error(f"Unable to transfer binary data from scope ch {ch} at {self.ip}. Check trigger and channel enable")
                 return [], []
@@ -141,7 +141,7 @@ class siglent_scpi:
         logger.info(f"CH {ch} binary data transfer took {time.time() - transfer_start_t:.4f} s")
         # Read the data preamble:
         self.dev.tx_txt(":WAVeform:PREamble?")
-        preamble = self.dev.rx_arb()
+        preamble = self.dev.rx_arb_optimized()
         # Extract the waveform description from the preamble:
         vdiv, ofst, interval, trdl, tdiv, vcode_per, adc_bit = self.main_desc(preamble)
         self.sample_rate = 1/interval
@@ -151,10 +151,9 @@ class siglent_scpi:
         # Unpack signed byte data.
         conversion_start_t = time.time()
         if adc_bit > 8:
-            convert_data = struct.unpack("%dh"%points, recv_byte)
-        
+            convert_data = np.frombuffer(recv_byte, dtype=np.int16, count=int(points))
         else:
-            convert_data = struct.unpack("%db"%points, recv_byte)
+            convert_data = np.frombuffer(recv_byte, dtype=np.int8, count=int(points))
         del recv_byte
         gc.collect()
 
@@ -325,7 +324,7 @@ def put_all_data_siglent(IP, logger=None):
     return
         
 if __name__ == "__main__":
-    IP = "192.168.140.238"
+    IP = "192.168.140.227"
     try:
         os.remove("/home/whamdata/WHAM_Data/logs/siglent_scope_test.log")
     except:

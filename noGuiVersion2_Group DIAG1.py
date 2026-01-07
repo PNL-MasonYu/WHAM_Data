@@ -9,7 +9,7 @@ from WhamRedPitaya import WhamRedPitayaGroup
 import time
 import logging
 start_time = time.localtime()
-err_file = "/mnt/n/whamdata/WHAMdata4_logs/DIAG1_log_" + time.strftime("%Y_%m_%d_%H-%M", start_time) + ".csv"
+err_file = "./logs/WHAMdata4_logs/DIAG1_log_" + time.strftime("%Y_%m_%d_%H-%M", start_time) + ".csv"
 logging.basicConfig(filename=err_file, level=logging.INFO)
 
 # MDSplus node to write data to
@@ -60,7 +60,6 @@ if __name__ == '__main__':
             device.n_pts = 5e5 + 1
             device.downsample_value = 1
         
-
     rpg.configure_devices()
     rpg.arm_devices() # This will finish when data is received from all devices
     rpg.store_data()

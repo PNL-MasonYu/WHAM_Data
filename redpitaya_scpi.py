@@ -90,6 +90,73 @@ class scpi (object):
             data += (self._socket.recv(r_size))
 
         return data
+    
+    def rx_arb_optimized(self):
+        """ Optimized Zero-Copy Receive """
+        
+        # 1. READ HEADER SLOWLY (Safe & Simple)
+        # The header is tiny (<15 bytes), so recv(1) overhead is negligible here.
+        # We parse exactly according to IEEE 488.2 block format: #NXXXXXXXX
+        
+        # Find the '#'
+        while True:
+            char = self._socket.recv(1)
+            if char == b'#':
+                break
+            # Handle Rigol/SCPI quirks (leading newlines)
+            if char not in (b'\n', b'\r'):
+                # Clear buffer if garbage is found
+                # (Optional: Read loop to drain garbage)
+                pass
+
+        # Read 'N' (Number of digits in the length string)
+        length_digits_count = int(self._socket.recv(1))
+        
+        if length_digits_count > 0:
+            # Read the actual length bytes
+            length_str = self._socket.recv(length_digits_count)
+            total_bytes = int(length_str)
+        else:
+            # Indefinite block length (rare for scopes, but possible)
+            # Assuming definite length for now based on your snippet
+            return False
+
+        # 2. PRE-ALLOCATE MEMORY
+        # We use a bytearray which is mutable (no copying on write)
+        # faster than string concatenation.
+        data_buffer = bytearray(total_bytes)
+        
+        # Create a memoryview. This allows socket.recv_into to write 
+        # directly into the specific slice of the array without copying.
+        view = memoryview(data_buffer)
+        
+        bytes_received = 0
+        
+        # 3. HIGH SPEED LOOP
+        while bytes_received < total_bytes:
+            # Calculate how many bytes needed
+            bytes_remaining = total_bytes - bytes_received
+            
+            # Read directly into the buffer slice
+            # recv_into returns the number of bytes actually read
+            chunk_len = self._socket.recv_into(view[bytes_received:], bytes_remaining)
+            
+            if chunk_len == 0:
+                raise RuntimeError("Socket connection broken during transfer")
+                
+            bytes_received += chunk_len
+
+        # 4. READ TERMINATOR
+        # SCPI usually sends \n after the data block. Drain it.
+        try:
+            self._socket.settimeout(0.1) # Short timeout just to peek
+            self._socket.recv(1)
+        except socket.timeout:
+            pass
+        finally:
+            self._socket.settimeout(None) # Restore blocking
+
+        return data_buffer # Return as bytearray (compatible with numpy)
 
     def tx_txt(self, msg):
         """Send text string ending and append delimiter."""

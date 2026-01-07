@@ -92,10 +92,7 @@ class rigol_scpi:
         self.dev.tx_txt(":WAV:FORM WORD") # 2 bytes per point
         self.dev.tx_txt(":WAV:DATA?")
         buff_byte1 = self.dev.rx_arb()
-        rawdata = []
-        for i in range(0, len(buff_byte1), 2):
-            bit_data = int.from_bytes(bytearray(buff_byte1[i:i+2]), 'little')
-            rawdata.append(bit_data)
+        rawdata = np.frombuffer(buff_byte1, dtype=np.uint16)
         del buff_byte1
         volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
         vertical_position = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":POSition?"))
@@ -129,9 +126,7 @@ class rigol_scpi:
             self.dev.tx_txt(":WAV:FORM BYTE")
             self.dev.tx_txt(":WAV:DATA?")
             buff = self.dev.rx_arb()
-            for i in range(0, len(buff)):
-                bit_data = int.from_bytes(bytearray(buff[i:i+1]), 'little')
-                rawdata.append(bit_data)
+            rawdata.extend(buff)
 
             # Need this extra command in here to ensure the next series of bytes starts with the proper header
             volts_per_division = float(self.dev.txrx_txt(":CHANnel" + str(ch) + ":SCALe?"))
