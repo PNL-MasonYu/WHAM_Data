@@ -11,6 +11,11 @@ import gc
 from Siglentscope_SCPI import put_all_data_siglent
 matplotlib.use('agg')
 
+RIGOL_LOG_DIR = "/home/whamdata/WHAM_Data/logs"
+RIGOL_LOG_PREFIX = "rigol_scope_"
+RIGOL_LOG_SUFFIX = ".log"
+RIGOL_MAX_LOG_FILES = 10
+
 
 ######################################################
 
@@ -23,6 +28,8 @@ def initialize_logger(path, IP):
     logging.captureWarnings(True)
 # Create a file handler to write to.
     #file_handler = logging.FileHandler("/home/dtacqAdmin/procScripts/logs/postproc_shinethru.log", "w")
+    if logger.hasHandlers():
+        logger.handlers.clear()
     file_handler = logging.FileHandler(path, "a")
 
     file_handler.setLevel(logging.DEBUG)
@@ -37,10 +44,50 @@ def initialize_logger(path, IP):
 
 ######################################################
 
+def get_current_shot_number(mdsplus_server="andrew.psl.wisc.edu", mdsplus_tree="wham"):
+    conn = connection.Connection(mdsplus_server)
+    conn.openTree(mdsplus_tree, 0)
+    shot_value = conn.get('$shot')
+    conn.closeTree(mdsplus_tree, 0)
+    try:
+        return int(shot_value)
+    except (TypeError, ValueError):
+        try:
+            return int(shot_value.data())
+        except Exception:
+            return int(str(shot_value).strip())
+
+
+def build_shot_log_path(shot_num):
+    return os.path.join(RIGOL_LOG_DIR, f"{RIGOL_LOG_PREFIX}{shot_num}{RIGOL_LOG_SUFFIX}")
+
+
+def prune_old_shot_logs(max_logs=RIGOL_MAX_LOG_FILES):
+    try:
+        log_files = []
+        for file_name in os.listdir(RIGOL_LOG_DIR):
+            if file_name.startswith(RIGOL_LOG_PREFIX) and file_name.endswith(RIGOL_LOG_SUFFIX):
+                shot_str = file_name[len(RIGOL_LOG_PREFIX):-len(RIGOL_LOG_SUFFIX)]
+                if shot_str.isdigit():
+                    file_path = os.path.join(RIGOL_LOG_DIR, file_name)
+                    if os.path.isfile(file_path):
+                        log_files.append(file_path)
+
+        if len(log_files) <= max_logs:
+            return
+
+        log_files.sort(key=lambda file_path: os.path.getmtime(file_path))
+        for old_log in log_files[:-max_logs]:
+            os.remove(old_log)
+    except Exception:
+        pass
+
+######################################################
+
 class rigol_scpi:
     def __init__(self, IP="192.168.130.227", port=5555) -> None:
         
-        self.dev = scpi(IP, port=port)
+        self.dev = scpi(IP, port=port, timeout=30)
         self.dev.delimiter = '\n'
         self.ip = IP
         self.shot_num = None
@@ -48,14 +95,16 @@ class rigol_scpi:
 
         if self.ip == "192.168.140.227":
             self.device_node = "RAW.MASON_SCOPE"
-        if self.ip == "192.168.130.231":
+        if self.ip == "192.168.140.251":
             self.device_node = "RAW.TQ_SCOPE"
         if self.ip == "192.168.140.225":
             self.device_node = "RAW.MASON_DS1000"
         if self.ip == "192.168.130.78":
             self.device_node = "RAW.GAS_SCOPE" 
+            time.sleep(15) # wait for the long acquisition to finish
         if self.ip == "192.168.130.80":
             self.device_node = "RAW.MEZZ_SCOPE"
+            time.sleep(15) # wait for the long acquisition to finish
         if self.ip == "192.168.130.81":
             self.device_node = "RAW.SCOPE_1074"
         if self.ip == "192.168.140.228":
@@ -64,7 +113,7 @@ class rigol_scpi:
             self.device_node = "RAW.DIAG_SCOPE_2"
         if self.ip == "192.168.140.230":
             self.device_node = "RAW.DIAG_SCOPE_3"
-        if self.ip == "192.168.140.150":
+        if self.ip == "192.168.140.140":
             self.device_node = "RAW.NEUTRONSCOPE"
         if self.ip == "192.168.140.238":
             self.device_node = "RAW.BDUMP_SCOPE"
@@ -222,13 +271,37 @@ class rigol_scpi:
         print(msg2)
         logger.info(msg1)
         logger.info(msg2)
+        
+        # Compute time base for all channels
+        if self.data_ch1 is not None and np.size(self.data_ch1) > 0:
+            time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1), dtype=np.float32) + self.get_delay()
+        else:
+            time_base = None
+        
         # iterate through each channel and write the data
         data_chs = [self.data_ch1, self.data_ch2, self.data_ch3, self.data_ch4]
         for ch in [1,2,3,4]: 
             try:
                 start_time = time.time()
-                # Write (put) the data to the device in MDSplus
-                conn.put(self.device_node+".CH_0" + str(ch) + ":SIGNAL", "$", data_chs[ch-1])
+                # Build time axis for this channel
+                if data_chs[ch-1] is not None and np.size(data_chs[ch-1]) > 0:
+                    if time_base is not None and np.size(time_base) == np.size(data_chs[ch-1]):
+                        time_axis = time_base
+                    else:
+                        time_axis = np.arange(np.size(data_chs[ch-1]), dtype=np.float32) / float(self.get_sampling_rate()) + self.get_delay()
+                    
+                    # Write (put) the data to the device in MDSplus with BUILD_SIGNAL for explicit time axis
+                    conn.put(
+                        self.device_node+".CH_0" + str(ch) + ":SIGNAL",
+                        "BUILD_SIGNAL($,*,BUILD_WITH_UNITS($,'seconds'))",
+                        data_chs[ch-1],
+                        time_axis,
+                    )
+                else:
+                    # Skip channels with no data
+                    logger.info(f"Skipping {self.ip}:CH{ch} - no data")
+                    continue
+                
                 conn.put(self.device_node+".CH_0" + str(ch) + ":FREQ", "$",  self.get_sampling_rate())
                 conn.put(self.device_node+".CH_0" + str(ch) + ":OFFSET", "$", self.get_vertical_offset(ch=ch))
                 conn.put(self.device_node+".CH_0" + str(ch) + ":DELAY", "$", self.get_delay())
@@ -276,11 +349,11 @@ class rigol_scpi:
         self.offset = float(t0_str.split(" =")[-1])
 
     def store_data_local(self, path):
-        time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1)) - self.get_delay()
+        time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1)) + self.get_delay()
 
     def plot_all_ch(self):
         
-        time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1)) - self.get_delay()
+        time_base = np.linspace(0, len(self.data_ch1)/self.get_sampling_rate(), len(self.data_ch1)) + self.get_delay()
         fig = plt.figure(figsize=(10, 8))
         plt.plot(time_base, self.data_ch1, label="ch1")
         plt.plot(time_base, self.data_ch2, label="ch2")
@@ -297,6 +370,16 @@ class rigol_scpi:
         
     def run(self):
         self.dev.tx_txt(":RUN")
+
+    def set_normal_trigger_and_run(self, logger=None):
+        try:
+            self.dev.tx_txt(":TRIGger:MODE NORMal")
+            self.dev.tx_txt(":RUN")
+            if logger is not None:
+                logger.info(f"Scope trigger mode set to NORMal and RUN at {self.ip}")
+        except Exception as error:
+            if logger is not None:
+                logger.error(f"Failed to set trigger mode NORMal and RUN at {self.ip}: {error}")
         
     def force_trig(self):
         self.dev.tx_txt(":TFORce")
@@ -325,7 +408,14 @@ def put_all_data(IP):
     130.80 - Mezzanine scope for scintillator and REM ball
     130.81 - DHO1074
     '''
-    logger = initialize_logger("/home/whamdata/WHAM_Data/logs/rigol_scope.log", IP)
+    shot_num = None
+    try:
+        shot_num = get_current_shot_number()
+    except Exception:
+        shot_num = 0
+    logger = initialize_logger(build_shot_log_path(shot_num), IP)
+    prune_old_shot_logs()
+    scope = None
     try:
         start_time = time.time()
         print(f"Starting {IP}")
@@ -335,53 +425,49 @@ def put_all_data(IP):
         print(error)
         print(f"{IP} is not connected")
         return
+
+    try:
+        if IP == "192.168.130.233":
+                scope.get_all_ch_waveform_chunks()
+        else:
+            #scope.get_waveform(2)
+            scope.get_all_ch_waveform()
+
+        logger.info(f"Got raw data from {IP}")
+
+        scope.get_time_scale()
+        logger.info(f"Got time scale from {IP}")
+        scope.get_vertical_scale()
+        logger.info(f"Got vertical scale from {IP}")
+        scope.shot_num = shot_num
         
-    if IP == "192.168.130.233":
-            scope.get_all_ch_waveform_chunks()
-    else:
-        #scope.get_waveform(2)
-        scope.get_all_ch_waveform()
-
-    logger.info(f"Got raw data from {IP}")
-
-    scope.get_time_scale()
-    logger.info(f"Got time scale from {IP}")
-    scope.get_vertical_scale()
-    logger.info(f"Got vertical scale from {IP}")
-    scope.shot_num = 0
-    
-    scope._write_mdsplus(logger)
-    logger.info(f"Wrote to MDSPlus from {IP}")
-    scope.run()
-    logger.info(f"{IP} running")
-    scope.plot_all_ch()
-    #scope.write_waveform(cal_file)
-    time_taken = time.time() - start_time
-    logger.info(f"Completed {IP}, took {time_taken} s\n")
+        scope._write_mdsplus(logger)
+        logger.info(f"Wrote to MDSPlus from {IP}")
+        scope.plot_all_ch()
+        #scope.write_waveform(cal_file)
+        time_taken = time.time() - start_time
+        logger.info(f"Completed {IP}, took {time_taken} s\n")
+    except Exception as error:
+        logger.error(f"Error during Rigol acquisition/write for {IP}: {error}")
+    finally:
+        if scope is not None:
+            scope.set_normal_trigger_and_run(logger)
     return
     
 if __name__ == "__main__":
-    '''
-    140.227 - Mason_Scope
-    130.231 - TQ_SCOPE
-    140.225 - Mason-DS1000 
-    130.80 - Mezzanine scope for scintillator and REM ball
-    130.81 - DHO1074
-    140.228 - DIAG_SCOPE_1
-    '''
+
     try:
-        os.remove("/home/whamdata/WHAM_Data/logs/rigol_scope.log")
-        os.remove("/home/whamdata/WHAM_Data/logs/siglent_scope.log")
         os.remove("/home/whamdata/WHAM_Data/logs/rigol_continuous.log")
     except:
         pass
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
 
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+    
         # RIGOL Scopes
-        for IP in ["192.168.130.231", 
-                   "192.168.130.78", 
+        for IP in ["192.168.130.78", 
                    "192.168.130.80", 
-                   "192.168.130.81", 
+#                   "192.168.130.81", 
+                   "192.168.140.251",
                    "192.168.140.225", 
                    "192.168.140.228", 
                    "192.168.140.229", 
@@ -391,5 +477,15 @@ if __name__ == "__main__":
 
         # Siglent Scopes
         for IP in ["192.168.140.227", 
-                   "192.168.140.238"]:
+                   "192.168.140.238",
+                   "192.168.130.231",
+                   "192.168.140.155",
+                   "192.168.140.59",
+                   "192.168.130.89",
+                   "192.168.130.90",
+                   "192.168.130.91"]:
             executor.submit(put_all_data_siglent, IP)
+
+    print("This script is no longer used for continuous acquisition. Please use the new script on gogo for that purpose.")
+    pass
+    

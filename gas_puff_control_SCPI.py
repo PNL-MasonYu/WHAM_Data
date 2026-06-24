@@ -8,7 +8,7 @@ import logging
 from WhamRedPitaya import WhamRedPitaya_SCPI
 from redpitaya_scpi import scpi
 start_time = time.localtime()
-err_file = "/mnt/n/whamdata/WHAMdata4_logs/GAS_log_" + time.strftime("%Y_%m_%d_%H-%M", start_time) + ".csv"
+err_file = "/home/whamdata/WHAM_Data/logs/rp_gas_puff.log"
 logging.basicConfig(filename=err_file, level=logging.INFO)
 
 ######################################################
@@ -43,20 +43,22 @@ class WhamGasPuff():
         Configure the internal data acquisition on the RPs and sets up the RP SCPI device
         """
         self.IP = IP
+        self.logger = initialize_logger("/home/whamdata/WHAM_Data/logs/rp_gas_puff.log", IP)
         self.rp = WhamRedPitaya_SCPI(IP, device_node=device_node,
                                     mdsplus_server="andrew.psl.wisc.edu", mdsplus_tree="wham", shot_num=None, Trig="EXT_NE")
-        self.logger = initialize_logger("/home/whamdata/WHAM_Data/logs/rp_gas_puff.log", IP)
+        self.rp.connect()
         self.rp.bMDS = 1
         self.rp.n_pts = n_pts
         self.rp.bPlot = 1
         self.rp.downsample_value = downsample_value
         self.rp.channel = 3
-        self.rp.verbosity = 0
+        self.rp.verbosity = 1
         self.dev = self.rp.dev
         self.timer_increment = 10    #Time interval in seconds at which the arb. waveform from labview is updated
         self.next_t = 0
         self.done = False
         self.iterations = 0
+        
 
     def arm_square_gas_puff(self, wave_form, ampl, pulse_len_ms, ch=1):
         """
@@ -145,7 +147,33 @@ class WhamGasPuff():
         logging.info("gas system armed with arbitrary waveform from {:}".format(path.split("/")[-1]))
 
         return
+    
+    def start_square_gas_puff(self, pulse_len_ms, ampl, ch=1):
+        """
+        Start a gas puff for a specified duration in seconds
+        This is used for testing only
+        """
+        freq = 1/pulse_len_ms * 1000 / 2
 
+        self.dev.tx_txt('GEN:RST')
+
+        self.dev.tx_txt('SOUR{:}:FUNC '.format(ch) + " SQUARE")
+        self.dev.tx_txt('SOUR{:}:FREQ:FIX '.format(ch) + str(freq))
+        self.dev.tx_txt('SOUR{:}:VOLT '.format(ch) + str(ampl))
+        self.dev.tx_txt('SOUR{:}:BURS:STAT BURST'.format(ch))
+        self.dev.tx_txt('SOUR{:}:BURS:NCYC 1'.format(ch))
+        self.dev.tx_txt('SOUR{:}:BURS:NOR 1'.format(ch))
+        self.dev.tx_txt('SOUR{:}:TRIG:INT'.format(ch))
+        self.dev.tx_txt('OUTPUT{:}:STATE ON'.format(ch))
+        print("Gas puff started for {:} ms".format(pulse_len_ms))
+        logging.info("Gas puff started for {:} seconds".format(pulse_len_ms/1000))
+        time.sleep(pulse_len_ms/1000)
+        self.dev.tx_txt('OUTPUT1:STATE OFF')
+        self.dev.tx_txt('OUTPUT2:STATE OFF')
+        print("Gas puff ended")
+        logging.info("Gas puff ended")
+        return
+    
     def _run_arb_waveform(self):
         """
         periodically checks the waveform file and load it
@@ -179,6 +207,7 @@ class WhamGasPuff():
         # Wait for trigger...
         self.rp.store()
         print("Output data acquired")
+        logging.info("Output data acquired")
         # Give some time for data transfer before disconnecting
         time.sleep(20)
         self.reset_gas_puff()
@@ -186,7 +215,6 @@ class WhamGasPuff():
         return
 
 if __name__ == "__main__":
-    
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         rp_01 = WhamGasPuff(IP = "192.168.130.228", device_node="raw.gas_puff_rp.rp_01") #f0:bd:40
         rp_02 = WhamGasPuff(IP = "192.168.130.229", device_node="raw.gas_puff_rp.rp_02") #f0:92:cd

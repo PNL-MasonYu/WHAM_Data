@@ -55,11 +55,20 @@ class WhamRedPitayaGroup():
         self.devices_list = []
         self.connected_devices_list = []
         self.threads = []
+        self._stored_devices = set()
 
         self.Trig = Trig
         self.shot_num = shot_num #None is the latest shot
 
         self._create_devices(device_nodes)
+
+    def _log_device_error(self, stage, device, err):
+        ip = "unknown"
+        if device is not None:
+            ip = getattr(device, "ip", "unknown")
+        msg = "{} failed for {}: {}".format(stage, ip, err)
+        print(msg)
+        logging.error(msg)
 
 
     def _get_tree(self):
@@ -88,35 +97,41 @@ class WhamRedPitayaGroup():
 
             # Create device object
             #device = WhamRedPitaya(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree, useTrig=self.Trig)
-            device = WhamRedPitaya_SCPI(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree, Trig=self.Trig, shot_num=self.shot_num)
-
-            # Add to list of device objects
-            self.devices_list.append(device)
-
-
-    def connect_devices(self):
-
-        # Attempt to establish connections to each device one by one
-
-        # Iterate through number of devices
-        for d in range(0,self.num_devices):
-
-            # Retrieve device from list of device objects
-            device = self.devices_list[d]
-
             try:
-                # Attempt to connect to device
-                device.connect()
+                device = WhamRedPitaya_SCPI(ip=ip, port=port, device_node=device_node, mdsplus_server=self.mdsplus_server, mdsplus_tree=self.mdsplus_tree, Trig=self.Trig, shot_num=self.shot_num)
+                self.devices_list.append(device)
+            except Exception as e:
+                self._log_device_error("Create", None, e)
+                self.devices_list.append(None)
 
-                # If successful, add device to list of connected devices
-                self.connected_devices_list.append(device)
-            
-            except WhamRedPitayaConnectionError as e:
 
-                # If not successful, skip and write None to list of connected devices
-                print("Skipping device at " + device.ip + ".")
-                logging.info("Skipping device at " + device.ip + ".")
-                self.connected_devices_list.append(None)
+    def _connect_device_thread(self, d, connect_timeout):
+        device = self.devices_list[d]
+        if device is None:
+            return
+        try:
+            device.connect(connect_timeout=connect_timeout)
+            self.connected_devices_list[d] = device
+        except Exception as e:
+            self._log_device_error("Connect", device, e)
+
+    def connect_devices(self, connect_timeout=5):
+
+        # Attempt to establish connections to each device in parallel.
+        # Pre-size list so each thread writes to a stable index.
+        self.connected_devices_list = [None] * self.num_devices
+        connect_threads = []
+
+        # Spawn one connection thread per device.
+        for d in range(0, self.num_devices):
+            t = Thread(target=self._connect_device_thread, args=(d, connect_timeout))
+            t.daemon = True
+            connect_threads.append(t)
+            t.start()
+
+        # Wait for all connection attempts to complete.
+        for t in connect_threads:
+            t.join()
 
 
     def configure_devices(self):
@@ -124,26 +139,49 @@ class WhamRedPitayaGroup():
         # Configure each **connected** device one by one
 
         # Iterate through list of connected devices
-        for device in self.connected_devices_list:
+        for i, device in enumerate(self.connected_devices_list):
 
-            if device == None:
+            if device is None:
                 continue
-            else:
+            try:
                 device.configure()
+            except Exception as e:
+                self._log_device_error("Configure", device, e)
+                self.connected_devices_list[i] = None
 
-    def arm_devices(self):
+    def _arm_device_thread(self, device, i, arm_results, timeout):
+        try:
+            ok = device.arm(timeout=timeout)
+            arm_results[i] = bool(ok)
+            if not ok:
+                self._log_device_error("Arm", device, "timeout or trigger failure")
+                return
+
+            try:
+                device.store()
+                self._stored_devices.add(i)
+            except Exception as e:
+                self._log_device_error("Store", device, e)
+        except Exception as e:
+            arm_results[i] = False
+            self._log_device_error("Arm", device, e)
+            logging.exception("Arm traceback for {}".format(device.ip))
+
+    def arm_devices(self, timeout=40):
 
         # Empty list to manage the threads
         self.threads = []
+        arm_results = {}
 
         # Iterate through list of connected devices
-        for device in self.connected_devices_list:
-            if device == None:
+        for i, device in enumerate(self.connected_devices_list):
+            if device is None:
                 continue
             else:
                 print("Creating thread for device at " + device.ip)
                 logging.info("Creating thread for device at " + device.ip)
-                t = Thread(target=device.arm)
+                t = Thread(target=self._arm_device_thread, args=(device, i, arm_results, timeout))
+                t.daemon = True
                 self.threads.append(t)
                 t.start()
                 
@@ -151,28 +189,49 @@ class WhamRedPitayaGroup():
         for t in self.threads:
             t.join()
 
+        finished = []
+        failed = []
+        for i, device in enumerate(self.connected_devices_list):
+            if device is None:
+                continue
+            if i not in arm_results or not arm_results[i]:
+                failed.append(device.ip)
+                self.connected_devices_list[i] = None
+            else:
+                finished.append(device.ip)
+
+        summary = "Arm threads complete: {} finished, {} failed".format(len(finished), len(failed))
+        print(summary)
+        logging.info(summary)
+        if finished:
+            logging.info("Arm finished devices: {}".format(", ".join(finished)))
+        if failed:
+            logging.info("Arm failed devices: {}".format(", ".join(failed)))
+
 
     def store_data(self):
 
         timeStart = time.time()
 
-        # Open process pool
-        with Pool() as pool: 
-
-            # Submit process jobs in parallel
-            result = pool.map_async(store_data, self.connected_devices_list)
-
-            result.wait()
-            z = result.get() # Wait for processes to complete
-
-            # Close process pool
-            pool.close()
-            pool.join()
+        for i, device in enumerate(self.connected_devices_list):
+            if device is None:
+                continue
+            if i in self._stored_devices:
+                continue
+            try:
+                device.store()
+                self._stored_devices.add(i)
+            except Exception as e:
+                self._log_device_error("Store", device, e)
+                self.connected_devices_list[i] = None
 
         print('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
         logging.info('Total elapsed time for store_data threads = {}'.format(time.time() - timeStart))
+        logging.info("Store stage complete: {} devices written".format(len(self._stored_devices)))
 # Wrapper function for device.store()
 def store_data(device):
+    if device is None:
+        return None
     return device.store()
     
 
@@ -221,14 +280,18 @@ class WhamRedPitaya_SCPI():
         self.verbosity = 1
 
         self.shot_num = shot_num
-        self.connect()
 
-    def connect(self):
+    def connect(self, connect_timeout=5):
         if self.verbosity > 0:
             print("Connecting to device at " + self.ip + " on port " + str(self.port) + ".")
             logging.info("Connecting to device at " + self.ip + " on port " + str(self.port) + ".")
-        self.dev = scpi.scpi(self.ip)
-        self.dev.tx_txt('ACQ:RST')
+        try:
+            self.dev = scpi.scpi(self.ip, timeout=connect_timeout)
+            self.dev.tx_txt('ACQ:RST')
+            self.dev.check_error()
+        except Exception as e:
+            raise WhamRedPitayaConnectionError("Unable to connect to {}:{} ({})".format(self.ip, self.port, e))
+        #self.dev.tx_txt('ACQ:RST')
 
     def configure(self):
         self.dev.tx_txt('ACQ:RST')
@@ -311,7 +374,7 @@ class WhamRedPitaya_SCPI():
         self.dev.tx_txt('ACQ:AXI:SOUR2:ENable ON')
         self.dev.check_error()
     
-    def arm(self, timeout=120):
+    def arm(self, timeout=40):
         # set the digital trigger pin to input only
         self.dev.tx_txt('DIG:PIN:DIR IN,DIO0_P')
         acq_start_time = time.time()
@@ -327,8 +390,14 @@ class WhamRedPitaya_SCPI():
         self.dev.check_error()
     
         duration = self.n_pts/(self.fs/self.downsample_value)
-        print("Acquiring for " + str(duration*1000) + " ms")
-        logging.info("Acquiring for " + str(duration*1000) + " ms")
+        acq_msg = "{} acquiring for {} ms (n_pts={}, dec={})".format(
+            self.ip,
+            duration*1000,
+            int(self.n_pts),
+            int(self.downsample_value),
+        )
+        print(acq_msg)
+        logging.info(acq_msg)
         start_time = time.time()
         while 1:
             self.dev.tx_txt('ACQ:AXI:SOUR1:TRIG:FILL?')
@@ -336,18 +405,18 @@ class WhamRedPitaya_SCPI():
             if self.dev.rx_txt() == '1':
                 break
             if time.time() - start_time > timeout:
-                print("Timeout reached! Exiting")
-                logging.info("Timeout reached! Exiting")
-                return
+                print("Timeout reached on {} while waiting for CH1 trigger fill".format(self.ip))
+                logging.info("Timeout reached on {} while waiting for CH1 trigger fill".format(self.ip))
+                return False
         while 1:
             self.dev.tx_txt('ACQ:AXI:SOUR2:TRIG:FILL?')
             time.sleep(0.1)
             if self.dev.rx_txt() == '1':
                 break
             if time.time() - start_time > timeout:
-                print("Timeout reached! Exiting")
-                logging.info("Timeout reached! Exiting")
-                return
+                print("Timeout reached on {} while waiting for CH2 trigger fill".format(self.ip))
+                logging.info("Timeout reached on {} while waiting for CH2 trigger fill".format(self.ip))
+                return False
 
         print("All data captured on " + self.ip)
         logging.info("All data captured on " + self.ip)
@@ -355,6 +424,7 @@ class WhamRedPitaya_SCPI():
         self.dev.tx_txt('ACQ:STOP')
 
         self._read()
+        return True
 
 
     def _read(self):
@@ -457,16 +527,8 @@ class WhamRedPitaya_SCPI():
 
     def write_mdsplus(self, conn):
         
-
-        # Check that we are not writing to the same shot
-        if self.shot_num == self.last_shot:
-            print("Overlapping shot number " + str(self.shot_num) + "!")
-            logging.error("Overlapping shot number " + str(self.shot_num) + "!")
     
-        if self.last_shot == None:
-            self.last_shot = self.shot_num
-    
-        msg1 = "Writing data to shot number: " + self.shot_num
+        msg1 = "Writing data to shot number: " + str(self.shot_num)
         msg2 = "Writing data to node: " + self.device_node
 
         print(msg1) 
@@ -479,7 +541,6 @@ class WhamRedPitaya_SCPI():
             conn.put(self.device_node+":CH_02", "$", self.data_ch2)
             conn.put(self.device_node+":FREQ", "$", self.fs/self.downsample_value)
             conn.put(self.device_node+":NAME", "$", self.ip + " " + str(datetime.now()))
-            self.last_shot = self.shot_num
         except Exception as E:
             print("MDSPlus Error on " + self.ip)
             print(E)
@@ -497,12 +558,11 @@ class WhamRedPitaya_SCPI():
         conn = connection.Connection(self.mdsplus_server) # Connect to MDSplus server (andrew)
         
         # Open the tree
-        conn.openTree(self.mdsplus_tree, self.shot_num)
+        conn.openTree(self.mdsplus_tree, 0)
 
         # Get the current shot number
         self.shot_num = conn.get('$shot')
-
-        time.sleep(1)
+        logging.info("Latest shot is " + str(self.shot_num))
         # Write the data
         self.write_mdsplus(conn)
 
@@ -581,6 +641,6 @@ class WhamRedPitaya_SCPI():
 
 class WhamRedPitayaConnectionError(Exception):
 
-    def __init__(self):
-        pass
+    def __init__(self, message=""):
+        super(WhamRedPitayaConnectionError, self).__init__(message)
 # %%

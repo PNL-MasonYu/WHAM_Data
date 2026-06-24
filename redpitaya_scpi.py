@@ -18,21 +18,28 @@ class scpi (object):
         self.host    = host
         self.port    = port
         self.timeout = timeout
+        self._socket = None
+        self._connect()
 
-        try:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def _connect(self):
+        """Open (or reopen) the TCP socket."""
+        if self._socket is not None:
+            try:
+                self._socket.close()
+            except Exception:
+                pass
 
-            if timeout is not None:
-                self._socket.settimeout(timeout)
-            #self._socket.setblocking(False)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if self.timeout is not None:
+            self._socket.settimeout(self.timeout)
+        self._socket.connect((self.host, self.port))
 
-            self._socket.connect((host, port))
-
-        except socket.error as e:
-            print('SCPI >> connect({!s:s}:{:d}) failed: {!s:s}'.format(host, port, e))
+    def reconnect(self):
+        """Public reconnect helper for callers that want to force a refresh."""
+        self._connect()
 
     def __del__(self):
-        if self._socket is not None:
+        if getattr(self, '_socket', None) is not None:
             self._socket.close()
         self._socket = None
 
@@ -148,19 +155,27 @@ class scpi (object):
 
         # 4. READ TERMINATOR
         # SCPI usually sends \n after the data block. Drain it.
+        previous_timeout = self._socket.gettimeout()
         try:
             self._socket.settimeout(0.1) # Short timeout just to peek
             self._socket.recv(1)
         except socket.timeout:
             pass
         finally:
-            self._socket.settimeout(None) # Restore blocking
+            self._socket.settimeout(previous_timeout)
 
         return data_buffer # Return as bytearray (compatible with numpy)
 
     def tx_txt(self, msg):
         """Send text string ending and append delimiter."""
-        return self._socket.sendall((msg + self.delimiter).encode('utf-8')) # was send(().encode('utf-8'))
+        payload = (msg + self.delimiter).encode('utf-8')
+        try:
+            return self._socket.sendall(payload) # was send(().encode('utf-8'))
+        except (socket.timeout, BrokenPipeError, ConnectionResetError, OSError):
+            # A transient transport failure can happen when instruments switch states.
+            # Reconnect once and retry the command.
+            self.reconnect()
+            return self._socket.sendall(payload)
 
     def txrx_txt(self, msg):
         """Send/receive text string."""
